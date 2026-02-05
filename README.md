@@ -1,2 +1,2 @@
-# CS315
+# CS60
 Datavis
