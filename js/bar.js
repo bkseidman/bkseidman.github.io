@@ -1,13 +1,13 @@
-function setup() {
-  createCanvas(700, 400);
-}
+console.log("bar.js loaded ✅");
 
-function draw() {
+function setup() {
+  const c = createCanvas(700, 400);
+  c.parent("sketch-holder");
   background(245);
   fill(20);
-  textSize(18);
-  text("p5 is working ✅", 20, 40);
-
-  // simple test shape
-  rect(20, 70, 200, 60);
+  textSize(22);
+  text("p5 is working ✅", 20, 50);
+  rect(20, 80, 200, 60);
 }
+
+function draw() {}
