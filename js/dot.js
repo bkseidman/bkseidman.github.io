@@ -12,7 +12,7 @@ function setup() {
   textFont("Arial");
   textSize(12);
 
-  // Extract precipitation values for SF
+  // Agreggate data for San Francisco 
   for (let r = 0; r < table.getRowCount(); r++) {
     if (table.getString(r, "Station.City") !== CITY) continue;
 
@@ -31,7 +31,7 @@ function drawPlot() {
   const baselineY = height - margin.bottom;
   const plotW = width - margin.left - margin.right;
 
-  // Use a high percentile-ish max so outliers don't crush the scale
+  // Use high percentile-ish max so outliers don't crush scale
   const maxVal = values[Math.floor(values.length * 0.95)] || 1;
   const xMax = max(maxVal, 0.5); // avoid tiny scales
 
@@ -45,7 +45,7 @@ function drawPlot() {
   stroke(0);
   line(margin.left, baselineY, width - margin.right, baselineY);
 
-  // X-axis ticks
+  // x-axis ticks
   const ticks = 5;
   for (let i = 0; i <= ticks; i++) {
     const v = (xMax / ticks) * i;
@@ -63,7 +63,7 @@ function drawPlot() {
   const stackStep = 10;
 
   // Bin values so heavy pile-ups (like 0.00) look reasonable
-  const binSize = 0.05; // adjust if needed: 0.02, 0.1, etc.
+  const binSize = 0.05; 
   let stackCounts = new Map();
 
   noStroke();
