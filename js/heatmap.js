@@ -18,7 +18,7 @@ function setup() {
   textFont("Arial");
   textSize(12);
 
-  // --- Aggregate precipitation by year and month ---
+  //// Agreggate data for San Francisco by year and month
   for (let r = 0; r < table.getRowCount(); r++) {
     if (table.getString(r, "Station.City") !== CITY) continue;
 
@@ -58,7 +58,7 @@ function drawHeatmap() {
     }
   }
 
-  // --- draw cells ---
+  // cells
   stroke(220);      // faint grid lines
   strokeWeight(1);
   for (let c = 0; c < years.length; c++) {
@@ -84,7 +84,7 @@ function drawHeatmap() {
     }
   }
 
-  // --- axes labels ---
+  // axes
   fill(20);
   textAlign(CENTER, TOP);
   for (let c = 0; c < years.length; c++) {
@@ -104,7 +104,7 @@ function drawHeatmap() {
     );
   }
 
-  // --- titles ---
+  // titles
   textAlign(CENTER, TOP);
   textSize(16);
   text(
