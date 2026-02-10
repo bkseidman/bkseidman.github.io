@@ -17,7 +17,7 @@ function setup() {
   textFont("Arial");
   textSize(12);
 
-  // --- Aggregate data ---
+  // Aggregate our data to just san Francisco 
   for (let r = 0; r < table.getRowCount(); r++) {
     if (table.getString(r, "Station.City") !== CITY) continue;
 
@@ -37,14 +37,14 @@ function drawChart() {
   background(245);
   fill(20);
 
-  // --- Chart area ---
+  // Area
   const chartW = w - margin.left - margin.right;
   const chartH = h - margin.top - margin.bottom;
 
-  // Find max for scaling
+  // Max for scale
   const maxVal = max(monthly);
 
-  // --- Axes ---
+  // Axes
   stroke(0);
   line(margin.left, margin.top, margin.left, margin.top + chartH); // y-axis
   line(
@@ -54,7 +54,7 @@ function drawChart() {
     margin.top + chartH
   ); // x-axis
 
-  // --- Y-axis ticks ---
+  // y-axis
   const ticks = 5;
   for (let i = 0; i <= ticks; i++) {
     const val = (maxVal / ticks) * i;
@@ -68,7 +68,7 @@ function drawChart() {
     text(val.toFixed(1), margin.left - 8, y);
   }
 
-  // --- Bars ---
+  // bars
   const barW = chartW / 12;
 
   for (let i = 0; i < 12; i++) {
@@ -79,13 +79,13 @@ function drawChart() {
     fill(100, 150, 200);
     rect(x + 5, y, barW - 10, barH);
 
-    // Month labels
+    // months
     fill(20);
     textAlign(CENTER, TOP);
     text(i + 1, x + barW / 2, margin.top + chartH + 8);
   }
 
-  // --- Titles ---
+  // titles
   textAlign(CENTER, TOP);
   textSize(16);
   text(
