@@ -1,11 +1,12 @@
-const BOX_VAR = "Volume";
+const CSV_FILE = "winequality-red.csv";
+const BOX_VAR = "volatile acidity";
 
 let table;
 let values = [];
 let m = { l: 70, r: 20, t: 30, b: 60 };
 
 function preload() {
-  table = loadTable("AAPL.csv", "csv", "header");
+  table = loadTable(CSV_FILE, "csv", "header");
 }
 
 function quantile(sorted, q) {
@@ -100,10 +101,8 @@ function draw() {
 
   // outliers highlighted
   noStroke();
+  fill(255, 0, 0);
   for (const v of values) {
-    if (v < lowFence || v > highFence) {
-      fill(255, 0, 0);
-      circle(cx, mapY(v), 7);
-    }
+    if (v < lowFence || v > highFence) circle(cx, mapY(v), 7);
   }
 }
