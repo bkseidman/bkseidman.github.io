@@ -1,14 +1,16 @@
-const HIST_VAR = "Close";
+const CSV_FILE = "winequality-red.csv";
+const HIST_VAR = "alcohol";
 const NUM_BINS = 20;
 
 let table;
 let values = [];
 let bins = [];
 let minV, maxV;
+
 let m = { l: 70, r: 20, t: 30, b: 60 };
 
 function preload() {
-  table = loadTable("AAPL.csv", "csv", "header");
+  table = loadTable(CSV_FILE, "csv", "header");
 }
 
 function setup() {
@@ -63,6 +65,7 @@ function drawAxes(x0, y0, x1, y1) {
 
 function draw() {
   background(255);
+
   if (bins.length === 0) {
     fill(0);
     text("No numeric data found for " + HIST_VAR, 20, 20);
