@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Heatmap in D3</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: white; border: 1px solid #ccc; padding: 8px;
+      border-radius: 6px; font-size: 12px; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Average Temperature Heatmap — Top 5 Cities by Month</div>
+  <svg id="chart" width="950" height="420"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    // References: D3 documentation + common heatmap patterns from Mike Bostock examples.
+    const svg = d3.select("#chart");
+    const tooltip = d3.select("#tooltip");
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 30, right: 30, bottom: 80, left: 160 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("data.csv").then(rows => {
+      const cleaned = rows.map(d => ({
+        city: d["Station.City"],
+        month: +d["Date.Month"],
+        avgTemp: +d["Data.Temperature.Avg Temp"]
+      }))
+      .filter(d => d.city && Number.isFinite(d.month) && Number.isFinite(d.avgTemp));
+
+      // Top 5 cities by count
+      const cityCounts = d3.rollups(cleaned, v => v.length, d => d.city)
+        .sort((a,b) => d3.descending(a[1], b[1]))
+        .slice(0, 5)
+        .map(d => d[0]);
+
+      const data = cleaned.filter(d => cityCounts.includes(d.city));
+
+      // Aggregate: mean avg temp per (city, month)
+      const agg = d3.rollups(
+        data,
+        v => d3.mean(v, d => d.avgTemp),
+        d => d.city,
+        d => d.month
+      );
+
+      const flat = [];
+      for (const [city, monthArr] of agg) {
+        for (const [month, meanTemp] of monthArr) {
+          flat.push({ city, month, meanTemp });
+        }
+      }
+
+      const cities = cityCounts;
+      const months = d3.range(1, 13);
+
+      const x = d3.scaleBand().domain(months).range([0, innerW]).padding(0.05);
+      const y = d3.scaleBand().domain(cities).range([0, innerH]).padding(0.05);
+
+      const tempExtent = d3.extent(flat, d => d.meanTemp);
+      const color = d3.scaleSequential()
+        .domain(tempExtent)
+        .interpolator(d3.interpolateBlues);
+
+      // axes
+      g.append("g")
+        .attr("transform", `translate(0,${innerH})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text").style("font-size", "12px");
+
+      g.append("g")
+        .call(d3.axisLeft(y))
+        .selectAll("text").style("font-size", "12px");
+
+      // axis labels
+      svg.append("text")
+        .attr("x", margin.left + innerW / 2)
+        .attr("y", height - 20)
+        .attr("text-anchor", "middle")
+        .text("Month");
+
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerH / 2))
+        .attr("y", 20)
+        .attr("text-anchor", "middle")
+        .text("City");
+
+      // cells
+      g.selectAll("rect")
+        .data(flat)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.month))
+        .attr("y", d => y(d.city))
+        .attr("width", x.bandwidth())
+        .attr("height", y.bandwidth())
+        .attr("fill", d => color(d.meanTemp))
+        .on("mousemove", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px")
+            .html(`<b>${d.city}</b><br><b>Month:</b> ${d.month}<br><b>Avg Temp:</b> ${d.meanTemp.toFixed(1)}°F`);
+        })
+        .on("mouseleave", () => tooltip.style("opacity", 0));
+    });
+  </script>
+</body>
+</html>
