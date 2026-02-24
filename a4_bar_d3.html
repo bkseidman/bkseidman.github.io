@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Bar chart in D3</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: white; border: 1px solid #ccc; padding: 8px;
+      border-radius: 6px; font-size: 12px; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Average Daily Precipitation by Month — San Francisco</div>
+  <svg id="chart" width="900" height="450"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    // References: D3 documentation + common axis patterns from Mike Bostock examples.
+    const CITY = "San Francisco";
+
+    const svg = d3.select("#chart");
+    const tooltip = d3.select("#tooltip");
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 30, right: 30, bottom: 60, left: 70 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("data.csv").then(rows => {
+      // filter city + parse
+      const sf = rows
+        .filter(d => d["Station.City"] === CITY)
+        .map(d => ({
+          month: +d["Date.Month"],
+          precip: +d["Data.Precipitation"]
+        }))
+        .filter(d => Number.isFinite(d.month) && Number.isFinite(d.precip));
+
+      // aggregate: avg precip per month
+      const byMonth = d3.rollups(
+        sf,
+        v => d3.mean(v, d => d.precip),
+        d => d.month
+      )
+      .map(([month, avg]) => ({ month, avg }))
+      .sort((a,b) => a.month - b.month);
+
+      const x = d3.scaleBand()
+        .domain(byMonth.map(d => d.month))
+        .range([0, innerW])
+        .padding(0.2);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(byMonth, d => d.avg) || 1])
+        .nice()
+        .range([innerH, 0]);
+
+      // axes
+      g.append("g")
+        .attr("transform", `translate(0,${innerH})`)
+        .call(d3.axisBottom(x))
+        .selectAll("text").style("font-size", "12px");
+
+      g.append("g")
+        .call(d3.axisLeft(y));
+
+      // axis labels
+      svg.append("text")
+        .attr("x", margin.left + innerW / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Month");
+
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerH / 2))
+        .attr("y", 18)
+        .attr("text-anchor", "middle")
+        .text("Average Daily Precipitation (inches)");
+
+      // bars + data labels + tooltip
+      const bars = g.selectAll("rect")
+        .data(byMonth)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.month))
+        .attr("y", d => y(d.avg))
+        .attr("width", x.bandwidth())
+        .attr("height", d => innerH - y(d.avg))
+        .on("mousemove", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px")
+            .html(`<b>Month:</b> ${d.month}<br><b>Avg precip:</b> ${d.avg.toFixed(2)}`);
+        })
+        .on("mouseleave", () => tooltip.style("opacity", 0));
+
+      // value labels on bars
+      g.selectAll(".label")
+        .data(byMonth)
+        .enter()
+        .append("text")
+        .attr("x", d => x(d.month) + x.bandwidth()/2)
+        .attr("y", d => y(d.avg) - 5)
+        .attr("text-anchor", "middle")
+        .style("font-size", "11px")
+        .text(d => d.avg.toFixed(2));
+    });
+  </script>
+</body>
+</html>
