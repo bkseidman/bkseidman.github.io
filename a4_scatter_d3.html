@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Scatter plot in D3</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: white; border: 1px solid #ccc; padding: 8px;
+      border-radius: 6px; font-size: 12px; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Max Temp vs Avg Temp — San Francisco (Scatter Plot)</div>
+  <svg id="chart" width="900" height="450"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    // References: D3 documentation + common axis patterns from Mike Bostock examples.
+    const CITY = "San Francisco";
+
+    const svg = d3.select("#chart");
+    const tooltip = d3.select("#tooltip");
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 30, right: 30, bottom: 60, left: 70 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("data.csv").then(rows => {
+      const sf = rows
+        .filter(d => d["Station.City"] === CITY)
+        .map(d => ({
+          date: d["Date.Full"],
+          avg: +d["Data.Temperature.Avg Temp"],
+          max: +d["Data.Temperature.Max Temp"]
+        }))
+        .filter(d => Number.isFinite(d.avg) && Number.isFinite(d.max));
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(sf, d => d.avg)).nice()
+        .range([0, innerW]);
+
+      const y = d3.scaleLinear()
+        .domain(d3.extent(sf, d => d.max)).nice()
+        .range([innerH, 0]);
+
+      g.append("g")
+        .attr("transform", `translate(0,${innerH})`)
+        .call(d3.axisBottom(x));
+
+      g.append("g")
+        .call(d3.axisLeft(y));
+
+      // axis labels
+      svg.append("text")
+        .attr("x", margin.left + innerW / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Avg Temperature (F)");
+
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerH / 2))
+        .attr("y", 18)
+        .attr("text-anchor", "middle")
+        .text("Max Temperature (F)");
+
+      g.selectAll("circle")
+        .data(sf)
+        .enter()
+        .append("circle")
+        .attr("cx", d => x(d.avg))
+        .attr("cy", d => y(d.max))
+        .attr("r", 3.5)
+        .attr("opacity", 0.8)
+        .on("mousemove", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px")
+            .html(`<b>Date:</b> ${d.date}<br><b>Avg:</b> ${d.avg}<br><b>Max:</b> ${d.max}`);
+        })
+        .on("mouseleave", () => tooltip.style("opacity", 0));
+    });
+  </script>
+</body>
+</html>
