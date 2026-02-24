@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Histogram in D3</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    .title { font-size: 18px; font-weight: 700; margin-bottom: 10px; }
+    .tooltip {
+      position: absolute; pointer-events: none;
+      background: white; border: 1px solid #ccc; padding: 8px;
+      border-radius: 6px; font-size: 12px; opacity: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="title">Histogram of Daily Precipitation — San Francisco</div>
+  <svg id="chart" width="900" height="450"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+    // References: D3 documentation + common histogram patterns from Mike Bostock examples.
+    const CITY = "San Francisco";
+
+    const svg = d3.select("#chart");
+    const tooltip = d3.select("#tooltip");
+
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const margin = { top: 30, right: 30, bottom: 60, left: 70 };
+    const innerW = width - margin.left - margin.right;
+    const innerH = height - margin.top - margin.bottom;
+
+    const g = svg.append("g").attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("data.csv").then(rows => {
+      const vals = rows
+        .filter(d => d["Station.City"] === CITY)
+        .map(d => +d["Data.Precipitation"])
+        .filter(v => Number.isFinite(v));
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(vals)).nice()
+        .range([0, innerW]);
+
+      const bins = d3.bin()
+        .domain(x.domain())
+        .thresholds(20)(vals);
+
+      const y = d3.scaleLinear()
+        .domain([0, d3.max(bins, d => d.length) || 1]).nice()
+        .range([innerH, 0]);
+
+      g.append("g")
+        .attr("transform", `translate(0,${innerH})`)
+        .call(d3.axisBottom(x));
+
+      g.append("g")
+        .call(d3.axisLeft(y));
+
+      // axis labels
+      svg.append("text")
+        .attr("x", margin.left + innerW / 2)
+        .attr("y", height - 15)
+        .attr("text-anchor", "middle")
+        .text("Precipitation (inches)");
+
+      svg.append("text")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerH / 2))
+        .attr("y", 18)
+        .attr("text-anchor", "middle")
+        .text("Count (days)");
+
+      g.selectAll("rect")
+        .data(bins)
+        .enter()
+        .append("rect")
+        .attr("x", d => x(d.x0) + 1)
+        .attr("y", d => y(d.length))
+        .attr("width", d => Math.max(0, x(d.x1) - x(d.x0) - 2))
+        .attr("height", d => innerH - y(d.length))
+        .on("mousemove", (event, d) => {
+          tooltip
+            .style("opacity", 1)
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY + 10) + "px")
+            .html(`<b>Range:</b> ${d.x0.toFixed(2)}–${d.x1.toFixed(2)}<br><b>Count:</b> ${d.length}`);
+        })
+        .on("mouseleave", () => tooltip.style("opacity", 0));
+    });
+  </script>
+</body>
+</html>
