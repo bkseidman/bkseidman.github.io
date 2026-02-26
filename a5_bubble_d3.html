@@ -11,6 +11,7 @@
 <style>
 body { font-family: Arial, sans-serif; margin: 40px; }
 .title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+.note { color: #444; margin: 8px 0 18px; max-width: 920px; }
 
 .tooltip {
   position: absolute;
@@ -24,19 +25,17 @@ body { font-family: Arial, sans-serif; margin: 40px; }
 }
 
 .legend-title { font-size: 12px; font-weight: bold; }
-
-.note { color: #444; margin: 8px 0 18px; max-width: 920px; }
 </style>
 </head>
 
 <body>
 
 <div class="title">
-BMW Bubble Chart (BEV Share vs Premium Share, Revenue Size, Colored by Region)
+BMW Sales Bubble Chart (Units Sold vs Average Price, Sized by Revenue, Colored by Region)
 </div>
+
 <div class="note">
-Each bubble is an aggregated summary for a region and month (month 1–12), averaged across all years in the dataset.
-This reduces overlap and makes patterns easier to see while still using the dataset.
+Each bubble is a summary for a region and month (month 1–12), aggregated across all years and models.
 </div>
 
 <svg id="chart" width="950" height="550"></svg>
@@ -47,7 +46,7 @@ This reduces overlap and makes patterns easier to see while still using the data
 /*
 CITATIONS:
 
-D3 official documentation for scales, axes, grouping, and rollups:
+D3 official documentation for scales, axes, and grouping:
    https://d3js.org/d3-scale
    https://d3js.org/d3-axis
    https://d3js.org/d3-array  (rollups / grouping)
@@ -68,7 +67,7 @@ const tooltip = d3.select("#tooltip");
 const width = +svg.attr("width");
 const height = +svg.attr("height");
 
-// space on right for legends
+// leave room on right for legends
 const margin = { top: 30, right: 260, bottom: 70, left: 90 };
 const innerW = width - margin.left - margin.right;
 const innerH = height - margin.top - margin.bottom;
@@ -83,26 +82,20 @@ d3.csv(CSV, d => ({
   model: d.Model,
   units: +d.Units_Sold,
   price: +d.Avg_Price_EUR,
-  revenue: +d.Revenue_EUR,
-  bev: +d.BEV_Share,
-  premium: +d.Premium_Share,
-  gdp: +d.GDP_Growth
+  revenue: +d.Revenue_EUR
 }))
 .then(raw => {
 
-  // Aggregate to: Region × Month (1-12), across all years/models
-  // For each (region, month):
-  // - avg BEV share
-  // - avg premium share
-  // - sum revenue
-  // - avg units sold (optional)
+  // Aggregate to: Region × Month across all years/models
+  // - avg units sold
+  // - avg price
+  // - total revenue
   const grouped = d3.rollups(
     raw,
     v => ({
-      bev: d3.mean(v, d => d.bev),
-      premium: d3.mean(v, d => d.premium),
-      revenue: d3.sum(v, d => d.revenue),
-      units: d3.mean(v, d => d.units),
+      units_avg: d3.mean(v, d => d.units),
+      price_avg: d3.mean(v, d => d.price),
+      revenue_total: d3.sum(v, d => d.revenue),
       n: v.length
     }),
     d => d.region,
@@ -112,56 +105,32 @@ d3.csv(CSV, d => ({
   const data = [];
   for (const [region, monthArr] of grouped) {
     for (const [month, stats] of monthArr) {
-      // safety: skip bad rows
-      if (!Number.isFinite(stats.bev) || !Number.isFinite(stats.premium) || !Number.isFinite(stats.revenue)) continue;
+      if (!Number.isFinite(stats.units_avg) || !Number.isFinite(stats.price_avg) || !Number.isFinite(stats.revenue_total)) continue;
       data.push({ region, month: +month, ...stats });
     }
   }
 
-  // Sort just so hover feels consistent
   data.sort((a,b) => d3.ascending(a.region, b.region) || d3.ascending(a.month, b.month));
 
   const regions = Array.from(new Set(data.map(d => d.region)));
 
   const x = d3.scaleLinear()
-    .domain(d3.extent(data, d => d.bev)).nice()
+    .domain(d3.extent(data, d => d.units_avg)).nice()
     .range([0, innerW]);
 
   const y = d3.scaleLinear()
-    .domain(d3.extent(data, d => d.premium)).nice()
+    .domain(d3.extent(data, d => d.price_avg)).nice()
     .range([innerH, 0]);
 
   const r = d3.scaleSqrt()
-    .domain(d3.extent(data, d => d.revenue))
-    .range([4, 18]);
+    .domain(d3.extent(data, d => d.revenue_total))
+    .range([5, 22]);
 
   const color = d3.scaleOrdinal()
     .domain(regions)
     .range(d3.schemeTableau10);
 
-  // Axes (ticks tuned for readability)
-  g.append("g")
-    .attr("transform", `translate(0,${innerH})`)
-    .call(d3.axisBottom(x).ticks(6).tickFormat(d3.format(".2f")));
-
-  g.append("g")
-    .call(d3.axisLeft(y).ticks(6).tickFormat(d3.format(".2f")));
-
-  // Axis labels
-  svg.append("text")
-    .attr("x", margin.left + innerW / 2)
-    .attr("y", height - 20)
-    .attr("text-anchor", "middle")
-    .text("BEV Share (average)");
-
-  svg.append("text")
-    .attr("transform", "rotate(-90)")
-    .attr("x", -(margin.top + innerH / 2))
-    .attr("y", 25)
-    .attr("text-anchor", "middle")
-    .text("Premium Share (average)");
-
-  // Light gridlines (optional but helps)
+  // Gridlines (helps readability)
   g.append("g")
     .attr("opacity", 0.15)
     .call(d3.axisLeft(y).ticks(6).tickSize(-innerW).tickFormat(""));
@@ -171,14 +140,36 @@ d3.csv(CSV, d => ({
     .attr("opacity", 0.15)
     .call(d3.axisBottom(x).ticks(6).tickSize(-innerH).tickFormat(""));
 
+  // Axes with nice formatting
+  g.append("g")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(x).ticks(6).tickFormat(d3.format(",")));
+
+  g.append("g")
+    .call(d3.axisLeft(y).ticks(6).tickFormat(d => "€" + d3.format(",")(d)));
+
+  // Axis labels
+  svg.append("text")
+    .attr("x", margin.left + innerW / 2)
+    .attr("y", height - 20)
+    .attr("text-anchor", "middle")
+    .text("Units Sold (average)");
+
+  svg.append("text")
+    .attr("transform", "rotate(-90)")
+    .attr("x", -(margin.top + innerH / 2))
+    .attr("y", 25)
+    .attr("text-anchor", "middle")
+    .text("Average Price (EUR)");
+
   // Bubbles
   g.selectAll("circle")
     .data(data)
     .enter()
     .append("circle")
-    .attr("cx", d => x(d.bev))
-    .attr("cy", d => y(d.premium))
-    .attr("r", d => r(d.revenue))
+    .attr("cx", d => x(d.units_avg))
+    .attr("cy", d => y(d.price_avg))
+    .attr("r", d => r(d.revenue_total))
     .attr("fill", d => color(d.region))
     .attr("opacity", 0.65)
     .attr("stroke", "white")
@@ -191,10 +182,9 @@ d3.csv(CSV, d => ({
         .html(
           `<b>Region:</b> ${d.region}<br>
            <b>Month:</b> ${d.month}<br>
-           <b>Avg BEV Share:</b> ${d.bev.toFixed(3)}<br>
-           <b>Avg Premium Share:</b> ${d.premium.toFixed(2)}<br>
-           <b>Total Revenue:</b> €${Math.round(d.revenue).toLocaleString()}<br>
-           <b>Avg Units Sold:</b> ${d.units.toFixed(0)}`
+           <b>Avg Units Sold:</b> ${d.units_avg.toFixed(0)}<br>
+           <b>Avg Price:</b> €${Math.round(d.price_avg).toLocaleString()}<br>
+           <b>Total Revenue:</b> €${Math.round(d.revenue_total).toLocaleString()}`
         );
     })
     .on("mouseleave", () => tooltip.style("opacity", 0));
@@ -226,8 +216,11 @@ d3.csv(CSV, d => ({
   const sizeLegend = d3.legendSize()
     .scale(r)
     .shape("circle")
-    .labelFormat(d3.format(".2s"))
-    .shapePadding(10);
+    .shapePadding(10)
+    .labelFormat(d => {
+      const billions = d / 1_000_000_000;
+      return billions.toFixed(0) + " Billion";
+    });
 
   svg.append("g")
     .attr("transform", `translate(${legendX}, 250)`)
