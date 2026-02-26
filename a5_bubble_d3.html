@@ -23,17 +23,20 @@ body { font-family: Arial, sans-serif; margin: 40px; }
   opacity: 0;
 }
 
-.legend-title {
-  font-size: 12px;
-  font-weight: bold;
-}
+.legend-title { font-size: 12px; font-weight: bold; }
+
+.note { color: #444; margin: 8px 0 18px; max-width: 920px; }
 </style>
 </head>
 
 <body>
 
 <div class="title">
-BMW Sales Bubble Chart (Units vs Price vs Revenue, Colored by Region)
+BMW Bubble Chart (BEV Share vs Premium Share, Revenue Size, Colored by Region)
+</div>
+<div class="note">
+Each bubble is an aggregated summary for a region and month (month 1–12), averaged across all years in the dataset.
+This reduces overlap and makes patterns easier to see while still using the dataset.
 </div>
 
 <svg id="chart" width="950" height="550"></svg>
@@ -44,15 +47,16 @@ BMW Sales Bubble Chart (Units vs Price vs Revenue, Colored by Region)
 /*
 CITATIONS:
 
-D3 official documentation for scales and axes:
+D3 official documentation for scales, axes, grouping, and rollups:
    https://d3js.org/d3-scale
    https://d3js.org/d3-axis
+   https://d3js.org/d3-array  (rollups / grouping)
 
-Bubble chart tooltip interaction pattern adapted from D3 Graph Gallery 
+Bubble chart tooltip interaction pattern adapted from D3 Graph Gallery
    Bubble plot with tooltip:
    https://d3-graph-gallery.com/graph/bubble_tooltip.html
 
-d3-legend library by Susie Lu (used for the color and size legends):
+d3-legend library by Susie Lu (used for the color + size legends):
    https://d3-legend.susielu.com/
 */
 
@@ -64,7 +68,8 @@ const tooltip = d3.select("#tooltip");
 const width = +svg.attr("width");
 const height = +svg.attr("height");
 
-const margin = { top: 30, right: 220, bottom: 70, left: 80 };
+// space on right for legends
+const margin = { top: 30, right: 260, bottom: 70, left: 90 };
 const innerW = width - margin.left - margin.right;
 const innerH = height - margin.top - margin.bottom;
 
@@ -79,74 +84,124 @@ d3.csv(CSV, d => ({
   units: +d.Units_Sold,
   price: +d.Avg_Price_EUR,
   revenue: +d.Revenue_EUR,
-  bev: +d.BEV_Share
+  bev: +d.BEV_Share,
+  premium: +d.Premium_Share,
+  gdp: +d.GDP_Growth
 }))
-.then(data => {
+.then(raw => {
+
+  // Aggregate to: Region × Month (1-12), across all years/models
+  // For each (region, month):
+  // - avg BEV share
+  // - avg premium share
+  // - sum revenue
+  // - avg units sold (optional)
+  const grouped = d3.rollups(
+    raw,
+    v => ({
+      bev: d3.mean(v, d => d.bev),
+      premium: d3.mean(v, d => d.premium),
+      revenue: d3.sum(v, d => d.revenue),
+      units: d3.mean(v, d => d.units),
+      n: v.length
+    }),
+    d => d.region,
+    d => d.month
+  );
+
+  const data = [];
+  for (const [region, monthArr] of grouped) {
+    for (const [month, stats] of monthArr) {
+      // safety: skip bad rows
+      if (!Number.isFinite(stats.bev) || !Number.isFinite(stats.premium) || !Number.isFinite(stats.revenue)) continue;
+      data.push({ region, month: +month, ...stats });
+    }
+  }
+
+  // Sort just so hover feels consistent
+  data.sort((a,b) => d3.ascending(a.region, b.region) || d3.ascending(a.month, b.month));
+
+  const regions = Array.from(new Set(data.map(d => d.region)));
 
   const x = d3.scaleLinear()
-    .domain(d3.extent(data, d => d.units)).nice()
+    .domain(d3.extent(data, d => d.bev)).nice()
     .range([0, innerW]);
 
   const y = d3.scaleLinear()
-    .domain(d3.extent(data, d => d.price)).nice()
+    .domain(d3.extent(data, d => d.premium)).nice()
     .range([innerH, 0]);
 
   const r = d3.scaleSqrt()
     .domain(d3.extent(data, d => d.revenue))
-    .range([3, 25]);
+    .range([4, 18]);
 
-  const regions = Array.from(new Set(data.map(d => d.region)));
   const color = d3.scaleOrdinal()
     .domain(regions)
     .range(d3.schemeTableau10);
 
+  // Axes (ticks tuned for readability)
   g.append("g")
     .attr("transform", `translate(0,${innerH})`)
-    .call(d3.axisBottom(x));
+    .call(d3.axisBottom(x).ticks(6).tickFormat(d3.format(".2f")));
 
   g.append("g")
-    .call(d3.axisLeft(y));
+    .call(d3.axisLeft(y).ticks(6).tickFormat(d3.format(".2f")));
 
+  // Axis labels
   svg.append("text")
     .attr("x", margin.left + innerW / 2)
     .attr("y", height - 20)
     .attr("text-anchor", "middle")
-    .text("Units Sold");
+    .text("BEV Share (average)");
 
   svg.append("text")
     .attr("transform", "rotate(-90)")
     .attr("x", -(margin.top + innerH / 2))
-    .attr("y", 20)
+    .attr("y", 25)
     .attr("text-anchor", "middle")
-    .text("Average Price (EUR)");
+    .text("Premium Share (average)");
 
+  // Light gridlines (optional but helps)
+  g.append("g")
+    .attr("opacity", 0.15)
+    .call(d3.axisLeft(y).ticks(6).tickSize(-innerW).tickFormat(""));
+
+  g.append("g")
+    .attr("transform", `translate(0,${innerH})`)
+    .attr("opacity", 0.15)
+    .call(d3.axisBottom(x).ticks(6).tickSize(-innerH).tickFormat(""));
+
+  // Bubbles
   g.selectAll("circle")
     .data(data)
     .enter()
     .append("circle")
-    .attr("cx", d => x(d.units))
-    .attr("cy", d => y(d.price))
+    .attr("cx", d => x(d.bev))
+    .attr("cy", d => y(d.premium))
     .attr("r", d => r(d.revenue))
     .attr("fill", d => color(d.region))
-    .attr("opacity", 0.7)
+    .attr("opacity", 0.65)
+    .attr("stroke", "white")
+    .attr("stroke-width", 0.8)
     .on("mousemove", (event, d) => {
       tooltip
         .style("opacity", 1)
         .style("left", (event.pageX + 10) + "px")
         .style("top", (event.pageY + 10) + "px")
         .html(
-          `<b>Model:</b> ${d.model}<br>
-           <b>Region:</b> ${d.region}<br>
-           <b>Date:</b> ${d.year}-${String(d.month).padStart(2, "0")}<br>
-           <b>Revenue:</b> €${d.revenue.toLocaleString()}<br>
-           <b>BEV Share:</b> ${d.bev}`
+          `<b>Region:</b> ${d.region}<br>
+           <b>Month:</b> ${d.month}<br>
+           <b>Avg BEV Share:</b> ${d.bev.toFixed(3)}<br>
+           <b>Avg Premium Share:</b> ${d.premium.toFixed(2)}<br>
+           <b>Total Revenue:</b> €${Math.round(d.revenue).toLocaleString()}<br>
+           <b>Avg Units Sold:</b> ${d.units.toFixed(0)}`
         );
     })
     .on("mouseleave", () => tooltip.style("opacity", 0));
 
+  // Legends
   const legendX = margin.left + innerW + 30;
 
-  // Color legend
   svg.append("text")
     .attr("x", legendX)
     .attr("y", 55)
@@ -162,7 +217,6 @@ d3.csv(CSV, d => ({
     .attr("transform", `translate(${legendX}, 70)`)
     .call(colorLegend);
 
-  // Size legend
   svg.append("text")
     .attr("x", legendX)
     .attr("y", 230)
