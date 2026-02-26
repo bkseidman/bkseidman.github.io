@@ -4,7 +4,9 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Bubble Chart in D3</title>
+
 <script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://d3-legend.susielu.com/d3-legend.min.js"></script>
 
 <style>
 body { font-family: Arial, sans-serif; margin: 40px; }
@@ -19,6 +21,11 @@ body { font-family: Arial, sans-serif; margin: 40px; }
   border-radius: 6px;
   font-size: 12px;
   opacity: 0;
+}
+
+.legend-title {
+  font-size: 12px;
+  font-weight: bold;
 }
 </style>
 </head>
@@ -45,6 +52,8 @@ Bubble chart tooltip interaction pattern adapted from D3 Graph Gallery
    Bubble plot with tooltip:
    https://d3-graph-gallery.com/graph/bubble_tooltip.html
 
+d3-legend library by Susie Lu (used for the color and size legends):
+   https://d3-legend.susielu.com/
 */
 
 const CSV = "bmw_sales.csv";
@@ -55,7 +64,7 @@ const tooltip = d3.select("#tooltip");
 const width = +svg.attr("width");
 const height = +svg.attr("height");
 
-const margin = { top: 30, right: 40, bottom: 70, left: 80 };
+const margin = { top: 30, right: 220, bottom: 70, left: 80 };
 const innerW = width - margin.left - margin.right;
 const innerH = height - margin.top - margin.bottom;
 
@@ -128,15 +137,49 @@ d3.csv(CSV, d => ({
         .html(
           `<b>Model:</b> ${d.model}<br>
            <b>Region:</b> ${d.region}<br>
-           <b>Date:</b> ${d.year}-${d.month}<br>
+           <b>Date:</b> ${d.year}-${String(d.month).padStart(2, "0")}<br>
            <b>Revenue:</b> €${d.revenue.toLocaleString()}<br>
            <b>BEV Share:</b> ${d.bev}`
         );
     })
     .on("mouseleave", () => tooltip.style("opacity", 0));
 
-});
+  const legendX = margin.left + innerW + 30;
 
+  // Color legend
+  svg.append("text")
+    .attr("x", legendX)
+    .attr("y", 55)
+    .attr("class", "legend-title")
+    .text("Region");
+
+  const colorLegend = d3.legendColor()
+    .scale(color)
+    .shape("circle")
+    .shapePadding(8);
+
+  svg.append("g")
+    .attr("transform", `translate(${legendX}, 70)`)
+    .call(colorLegend);
+
+  // Size legend
+  svg.append("text")
+    .attr("x", legendX)
+    .attr("y", 230)
+    .attr("class", "legend-title")
+    .text("Revenue (EUR)");
+
+  const sizeLegend = d3.legendSize()
+    .scale(r)
+    .shape("circle")
+    .labelFormat(d3.format(".2s"))
+    .shapePadding(10);
+
+  svg.append("g")
+    .attr("transform", `translate(${legendX}, 250)`)
+    .call(sizeLegend);
+
+});
 </script>
 
 </body>
