@@ -7,14 +7,14 @@ let values = [];
 let bins = [];
 let minV, maxV;
 
-let m = { l: 70, r: 20, t: 30, b: 60 };
+let m = { l: 80, r: 30, t: 60, b: 80 };
 
 function preload() {
   table = loadTable(CSV_FILE, "csv", "header");
 }
 
 function setup() {
-  const c = createCanvas(800, 450);
+  const c = createCanvas(1200, 600);
   c.parent("sketch");
 
   for (let r = 0; r < table.getRowCount(); r++) {
@@ -22,43 +22,71 @@ function setup() {
     if (Number.isFinite(v)) values.push(v);
   }
 
-  if (values.length === 0) return;
-
   minV = Math.min(...values);
   maxV = Math.max(...values);
 
   bins = new Array(NUM_BINS).fill(0);
-  for (const v of values) {
-    let t = (v - minV) / (maxV - minV || 1);
-    let idx = Math.floor(t * NUM_BINS);
+
+  for (let v of values) {
+    let t = (v - minV) / (maxV - minV);
+    let idx = floor(t * NUM_BINS);
     if (idx === NUM_BINS) idx = NUM_BINS - 1;
     bins[idx]++;
   }
+
+  noLoop();
 }
 
 function drawGrid(x0, y0, x1, y1) {
-  stroke(0, 25);
+  stroke(0, 20);
   strokeWeight(1);
-  for (let i = 0; i <= 10; i++) line(lerp(x0, x1, i / 10), y0, lerp(x0, x1, i / 10), y1);
-  for (let j = 0; j <= 10; j++) line(x0, lerp(y0, y1, j / 10), x1, lerp(y0, y1, j / 10));
+
+  for (let i = 0; i <= 10; i++) {
+    let x = lerp(x0, x1, i / 10);
+    line(x, y0, x, y1);
+  }
+
+  for (let i = 0; i <= 10; i++) {
+    let y = lerp(y0, y1, i / 10);
+    line(x0, y, x1, y);
+  }
 }
 
-function drawAxes(x0, y0, x1, y1) {
+function drawAxes(x0, y0, x1, y1, maxCount) {
   stroke(0);
-  strokeWeight(2);
+  strokeWeight(3);
+
   line(x0, y1, x1, y1);
   line(x0, y0, x0, y1);
 
-  noStroke();
   fill(0);
-  textSize(12);
-  textAlign(CENTER, TOP);
-  text(HIST_VAR, (x0 + x1) / 2, y1 + 25);
+  noStroke();
+  textSize(14);
+
+  for (let i = 0; i <= 5; i++) {
+    let val = lerp(minV, maxV, i / 5);
+    let x = lerp(x0, x1, i / 5);
+    textAlign(CENTER, TOP);
+    text(val.toFixed(1), x, y1 + 10);
+  }
+
+  for (let i = 0; i <= 5; i++) {
+    let val = floor(lerp(0, maxCount, i / 5));
+    let y = lerp(y1, y0, i / 5);
+    textAlign(RIGHT, CENTER);
+    text(val, x0 - 10, y);
+  }
+
+  textAlign(CENTER);
+  textSize(26);
+  text("Histogram (p5)", width / 2, 30);
+
+  textSize(18);
+  text(HIST_VAR, (x0 + x1) / 2, y1 + 40);
 
   push();
-  translate(x0 - 45, (y0 + y1) / 2);
+  translate(x0 - 60, (y0 + y1) / 2);
   rotate(-HALF_PI);
-  textAlign(CENTER, TOP);
   text("Count", 0, 0);
   pop();
 }
@@ -66,57 +94,24 @@ function drawAxes(x0, y0, x1, y1) {
 function draw() {
   background(255);
 
-  if (bins.length === 0) {
-    fill(0);
-    text("No numeric data found for " + HIST_VAR, 20, 20);
-    return;
-  }
+  let x0 = m.l;
+  let y0 = m.t;
+  let x1 = width - m.r;
+  let y1 = height - m.b;
 
-  const x0 = m.l, y0 = m.t, x1 = width - m.r, y1 = height - m.b;
   drawGrid(x0, y0, x1, y1);
-  drawAxes(x0, y0, x1, y1);
 
-  const maxCount = Math.max(...bins);
-  const bw = (x1 - x0) / bins.length;
+  let maxCount = Math.max(...bins);
 
-  stroke(0);
-  strokeWeight(1);
+  let bw = (x1 - x0) / bins.length;
+
   fill(180);
-
-  let hovered = -1;
+  stroke(0);
 
   for (let i = 0; i < bins.length; i++) {
-    const h = (bins[i] / (maxCount || 1)) * (y1 - y0);
-    const bx = x0 + i * bw;
-    const by = y1 - h;
-
-    if (mouseX >= bx && mouseX < bx + bw && mouseY >= by && mouseY <= y1) hovered = i;
-    rect(bx, by, bw, h);
+    let h = map(bins[i], 0, maxCount, 0, y1 - y0);
+    rect(x0 + i * bw, y1 - h, bw, h);
   }
 
-  if (hovered !== -1) {
-    const binStart = lerp(minV, maxV, hovered / NUM_BINS);
-    const binEnd = lerp(minV, maxV, (hovered + 1) / NUM_BINS);
-    const label = `${binStart.toFixed(2)} to ${binEnd.toFixed(2)}\ncount: ${bins[hovered]}`;
-
-    textSize(12);
-    const tw = textWidth("count: " + bins[hovered]) + 90;
-    const th = 40;
-
-    const tx = constrain(mouseX + 12, 10, width - tw - 10);
-    const ty = constrain(mouseY - th - 12, 10, height - th - 10);
-
-    noStroke();
-    fill(255);
-    rect(tx, ty, tw, th);
-    stroke(0, 60);
-    noFill();
-    rect(tx, ty, tw, th);
-
-    noStroke();
-    fill(0);
-    textAlign(LEFT, TOP);
-    text(label, tx + 10, ty + 6);
-  }
+  drawAxes(x0, y0, x1, y1, maxCount);
 }
-//test
