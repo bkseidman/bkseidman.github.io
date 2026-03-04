@@ -11,11 +11,15 @@
 body { font-family: Arial, sans-serif; margin: 40px; }
 .title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
 .note { color: #444; margin: 8px 0 18px; max-width: 980px; }
-.cell rect.frame { fill: none; stroke: #ccc; }
-.cell circle { opacity: 0.6; }
+
 .axis text { font-size: 10px; }
 .axis path, .axis line { stroke: #ccc; }
+.frame { fill: none; stroke: #ccc; }
+
+.cell circle { opacity: 0.55; }
+
 .legend-title { font-size: 12px; font-weight: bold; }
+
 .tooltip {
   position: absolute;
   pointer-events: none;
@@ -31,13 +35,9 @@ body { font-family: Arial, sans-serif; margin: 40px; }
 
 <body>
 
-<div class="title">
-BMW Scatterplot Matrix (3×3)
-</div>
-
+<div class="title">BMW Scatterplot Matrix (3×3)</div>
 <div class="note">
-Each point is a (Region, Model, Month, Year) row from the CSV. The matrix compares 3 numeric variables:
-Units_Sold, Avg_Price_EUR, and BEV_Share. Color indicates Region.
+Compares 3 numeric variables (Units Sold, Average Price, Revenue). Color indicates Region.
 </div>
 
 <svg id="chart" width="980" height="980"></svg>
@@ -48,16 +48,13 @@ Units_Sold, Avg_Price_EUR, and BEV_Share. Color indicates Region.
 /*
 CITATIONS:
 
-D3 official documentation for scales, axes, and brushing/event handling:
+D3 official documentation for scales and axes:
    https://d3js.org/d3-scale
    https://d3js.org/d3-axis
 
 Scatterplot matrix concept + layout approach adapted from:
    Mike Bostock (D3) – Scatterplot Matrix example
    https://observablehq.com/@d3/scatterplot-matrix
-   (overall matrix layout idea: small multiples of scatterplots)
-
-All code written manually for this assignment using D3 v7 API.
 */
 
 const CSV = "bmw_sales.csv";
@@ -68,21 +65,20 @@ const tooltip = d3.select("#tooltip");
 const width = +svg.attr("width");
 const height = +svg.attr("height");
 
+// Pick 3 variables for a 3×3 matrix
 const vars = [
   { key: "units", label: "Units Sold" },
-  { key: "price", label: "Average Price" },
-  { key: "revenue", label: "Revenue" }
+  { key: "price", label: "Avg Price (EUR)" },
+  { key: "revenue", label: "Revenue (EUR)" }
 ];
-
 const n = vars.length;
 
-// Layout for the matrix
-const padding = 30;
-const margin = { top: 70, right: 220, bottom: 70, left: 80 };
-const size = Math.floor((Math.min(width - margin.left - margin.right, height - margin.top - margin.bottom)) / n);
+const margin = { top: 70, right: 220, bottom: 80, left: 90 };
+const gridW = width - margin.left - margin.right;
+const gridH = height - margin.top - margin.bottom;
 
-const plotW = size;
-const plotH = size;
+const cellSize = Math.floor(Math.min(gridW, gridH) / n);
+const padding = 28;
 
 const g = svg.append("g")
   .attr("transform", `translate(${margin.left},${margin.top})`);
@@ -94,11 +90,19 @@ d3.csv(CSV, d => ({
   model: d.Model,
   units: +d.Units_Sold,
   price: +d.Avg_Price_EUR,
-  bev: +d.BEV_Share
+  revenue: +d.Revenue_EUR
 }))
 .then(data => {
 
-  // Optional: cap to keep rendering snappy (still from CSV)
+  // Safety: drop rows with bad numbers
+  data = data.filter(d =>
+    Number.isFinite(d.units) &&
+    Number.isFinite(d.price) &&
+    Number.isFinite(d.revenue) &&
+    d.region
+  );
+
+  // Scatterplot matrix draws points n*n times; sampling keeps it fast + clean
   const MAX_POINTS = 2000;
   if (data.length > MAX_POINTS) data = d3.shuffle(data).slice(0, MAX_POINTS);
 
@@ -107,101 +111,116 @@ d3.csv(CSV, d => ({
     .domain(regions)
     .range(d3.schemeTableau10);
 
-  // One scale per variable (shared across its row/col)
-  const xScales = new Map();
-  const yScales = new Map();
+  // One scale per variable (shared across the whole matrix)
+  const x = new Map();
+  const y = new Map();
 
   vars.forEach(v => {
-    xScales.set(v.key,
-      d3.scaleLinear()
-        .domain(d3.extent(data, d => d[v.key])).nice()
-        .range([padding, plotW - padding])
+    x.set(v.key, d3.scaleLinear()
+      .domain(d3.extent(data, d => d[v.key])).nice()
+      .range([padding, cellSize - padding])
     );
 
-    yScales.set(v.key,
-      d3.scaleLinear()
-        .domain(d3.extent(data, d => d[v.key])).nice()
-        .range([plotH - padding, padding])
+    y.set(v.key, d3.scaleLinear()
+      .domain(d3.extent(data, d => d[v.key])).nice()
+      .range([cellSize - padding, padding])
     );
   });
 
-  // axis generators (small ticks)
-  const xAxis = key => d3.axisBottom(xScales.get(key)).ticks(4);
-  const yAxis = key => d3.axisLeft(yScales.get(key)).ticks(4);
+  // Axis groups: bottom row x-axes
+  g.selectAll(".x.axis")
+    .data(vars)
+    .enter()
+    .append("g")
+    .attr("class", "x axis")
+    .attr("transform", (v, i) => `translate(${i * cellSize}, ${n * cellSize})`)
+    .each(function(v) {
+      d3.select(this).call(d3.axisBottom(x.get(v.key)).ticks(4));
+    });
 
-  // Create all cells (i, j)
+  // Axis groups: left column y-axes
+  g.selectAll(".y.axis")
+    .data(vars)
+    .enter()
+    .append("g")
+    .attr("class", "y axis")
+    .attr("transform", (v, j) => `translate(0, ${j * cellSize})`)
+    .each(function(v) {
+      d3.select(this).call(d3.axisLeft(y.get(v.key)).ticks(4));
+    });
+
+  // Labels
+  g.selectAll(".x.label")
+    .data(vars)
+    .enter()
+    .append("text")
+    .attr("x", (v,i) => i * cellSize + cellSize / 2)
+    .attr("y", n * cellSize + 50)
+    .attr("text-anchor", "middle")
+    .style("font-size", "12px")
+    .text(v => v.label);
+
+  g.selectAll(".y.label")
+    .data(vars)
+    .enter()
+    .append("text")
+    .attr("transform", (v,j) => `translate(-60, ${j * cellSize + cellSize / 2}) rotate(-90)`)
+    .attr("text-anchor", "middle")
+    .style("font-size", "12px")
+    .text(v => v.label);
+
+  // Clip paths (so points stay inside cells)
+  const defs = svg.append("defs");
+  vars.forEach((vx, i) => {
+    vars.forEach((vy, j) => {
+      defs.append("clipPath")
+        .attr("id", `clip-${i}-${j}`)
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", cellSize)
+        .attr("height", cellSize);
+    });
+  });
+
+  // Cells (vx, vy) pairs
   const cell = g.selectAll(".cell")
-    .data(d3.cross(d3.range(n), d3.range(n)))
+    .data(d3.cross(vars, vars))
     .enter()
     .append("g")
     .attr("class", "cell")
-    .attr("transform", ([i, j]) => `translate(${i * plotW}, ${j * plotH})`);
+    .attr("transform", ([vx, vy]) => {
+      const i = vars.findIndex(v => v.key === vx.key);
+      const j = vars.findIndex(v => v.key === vy.key);
+      return `translate(${i * cellSize}, ${j * cellSize})`;
+    });
 
-  // frame around each cell
   cell.append("rect")
     .attr("class", "frame")
     .attr("x", 0)
     .attr("y", 0)
-    .attr("width", plotW)
-    .attr("height", plotH);
+    .attr("width", cellSize)
+    .attr("height", cellSize);
 
-  // axes: bottom row x axes
-  g.selectAll(".x.axis")
-    .data(d3.range(n))
-    .enter()
-    .append("g")
-    .attr("class", "x axis")
-    .attr("transform", i => `translate(${i * plotW}, ${n * plotH})`)
-    .call(i => i.call(xAxis(vars[i].key)));
+  // Draw points inside each cell
+  cell.each(function([vx, vy]) {
+    const i = vars.findIndex(v => v.key === vx.key);
+    const j = vars.findIndex(v => v.key === vy.key);
 
-  // axes: left column y axes
-  g.selectAll(".y.axis")
-    .data(d3.range(n))
-    .enter()
-    .append("g")
-    .attr("class", "y axis")
-    .attr("transform", j => `translate(0, ${j * plotH})`)
-    .call(j => j.call(yAxis(vars[j].key)));
+    const cx = x.get(vx.key);
+    const cy = y.get(vy.key);
 
-  // variable labels
-  g.selectAll(".x.label")
-    .data(d3.range(n))
-    .enter()
-    .append("text")
-    .attr("x", i => i * plotW + plotW / 2)
-    .attr("y", n * plotH + 45)
-    .attr("text-anchor", "middle")
-    .style("font-size", "12px")
-    .text(i => vars[i].label);
-
-  g.selectAll(".y.label")
-    .data(d3.range(n))
-    .enter()
-    .append("text")
-    .attr("transform", j => `translate(-55, ${j * plotH + plotH / 2}) rotate(-90)`)
-    .attr("text-anchor", "middle")
-    .style("font-size", "12px")
-    .text(j => vars[j].label);
-
-  // Draw points in each cell
-  cell.each(function([i, j]) {
-    const xKey = vars[i].key;
-    const yKey = vars[j].key;
-
-    const cx = xScales.get(xKey);
-    const cy = yScales.get(yKey);
-
-    const cellG = d3.select(this);
-
-    cellG.selectAll("circle")
+    d3.select(this)
+      .attr("clip-path", `url(#clip-${i}-${j})`)
+      .selectAll("circle")
       .data(data)
       .enter()
       .append("circle")
-      .attr("cx", d => cx(d[xKey]))
-      .attr("cy", d => cy(d[yKey]))
-      .attr("r", 2.2)
+      .attr("cx", d => cx(d[vx.key]))
+      .attr("cy", d => cy(d[vy.key]))
+      .attr("r", 2.5)
       .attr("fill", d => color(d.region))
-      .on("mouseenter", (event, d) => {
+      .on("mousemove", (event, d) => {
         tooltip
           .style("opacity", 1)
           .style("left", (event.pageX + 10) + "px")
@@ -210,27 +229,17 @@ d3.csv(CSV, d => ({
             `<b>Region:</b> ${d.region}<br>
              <b>Model:</b> ${d.model}<br>
              <b>Date:</b> ${d.year}-${String(d.month).padStart(2,"0")}<br>
-             <b>Units:</b> ${d.units}<br>
+             <b>Units:</b> ${d.units.toLocaleString()}<br>
              <b>Avg Price:</b> €${Math.round(d.price).toLocaleString()}<br>
-             <b>BEV Share:</b> ${d.bev}`
+             <b>Revenue:</b> €${Math.round(d.revenue).toLocaleString()}`
           );
-
-        // highlight same row across the entire matrix (simple extra credit-ish)
-        d3.selectAll(".cell circle").attr("opacity", 0.12);
-        d3.selectAll(".cell circle")
-          .filter(p => p === d)
-          .attr("opacity", 1)
-          .attr("r", 4);
       })
-      .on("mouseleave", () => {
-        tooltip.style("opacity", 0);
-        d3.selectAll(".cell circle").attr("opacity", 0.6).attr("r", 2.2);
-      });
+      .on("mouseleave", () => tooltip.style("opacity", 0));
   });
 
   // Legend
   const legend = svg.append("g")
-    .attr("transform", `translate(${width - 200}, 120)`);
+    .attr("transform", `translate(${width - 200}, 140)`);
 
   legend.append("text")
     .attr("class", "legend-title")
