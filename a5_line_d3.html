@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Line Chart in D3</title>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 40px; }
+.title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px;
+  font-size: 12px;
+  opacity: 0;
+}
+
+.legend-title { font-size: 12px; font-weight: bold; }
+</style>
+</head>
+
+<body>
+
+<div class="title">
+BMW Revenue Over Time by Region
+</div>
+
+<svg id="chart" width="950" height="550"></svg>
+<div id="tooltip" class="tooltip"></div>
+
+<script>
+
+/*
+CITATIONS:
+
+D3 official documentation for time scales, axes, and line generators:
+   https://d3js.org/d3-scale/time
+   https://d3js.org/d3-axis
+   https://d3js.org/d3-shape/line
+
+Time-series line chart structure adapted from:
+   D3 Graph Gallery – Line Chart
+   https://d3-graph-gallery.com/graph/line_basic.html
+*/
+
+const CSV = "bmw_sales.csv";
+
+const svg = d3.select("#chart");
+
+const width = +svg.attr("width");
+const height = +svg.attr("height");
+
+const margin = { top: 40, right: 220, bottom: 60, left: 100 };
+const innerW = width - margin.left - margin.right;
+const innerH = height - margin.top - margin.bottom;
+
+const g = svg.append("g")
+  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+d3.csv(CSV, d => ({
+  date: new Date(+d.Year, +d.Month - 1),
+  region: d.Region,
+  revenue: +d.Revenue_EUR
+}))
+.then(data => {
+
+  // Sum revenue per region per month
+  const grouped = d3.rollups(
+    data,
+    v => d3.sum(v, d => d.revenue),
+    d => d.region,
+    d => d3.timeMonth(d.date)
+  );
+
+  const regions = grouped.map(d => d[0]);
+
+  const series = grouped.map(([region, values]) => ({
+    region,
+    values: values
+      .map(([date, revenue]) => ({date, revenue}))
+      .sort((a,b) => d3.ascending(a.date,b.date))
+  }));
+
+  const allDates = series.flatMap(d => d.values.map(v => v.date));
+  const allRevenue = series.flatMap(d => d.values.map(v => v.revenue));
+
+  const x = d3.scaleTime()
+    .domain(d3.extent(allDates))
+    .range([0, innerW]);
+
+  const y = d3.scaleLinear()
+    .domain([0, d3.max(allRevenue)]).nice()
+    .range([innerH, 0]);
+
+  const color = d3.scaleOrdinal()
+    .domain(regions)
+    .range(d3.schemeTableau10);
+
+  // axes
+  g.append("g")
+    .attr("transform", `translate(0,${innerH})`)
+    .call(d3.axisBottom(x).ticks(d3.timeYear.every(1)));
+
+  g.append("g")
+    .call(
+      d3.axisLeft(y)
+        .ticks(6)
+        .tickFormat(d => "€" + (d/1_000_000_000).toFixed(0) + "B")
+    );
+
+  // axis labels
+  svg.append("text")
+    .attr("x", margin.left + innerW/2)
+    .attr("y", height - 15)
+    .attr("text-anchor","middle")
+    .text("Year");
+
+  svg.append("text")
+    .attr("transform","rotate(-90)")
+    .attr("x", -(margin.top + innerH/2))
+    .attr("y", 30)
+    .attr("text-anchor","middle")
+    .text("Revenue (EUR)");
+
+  const line = d3.line()
+    .x(d => x(d.date))
+    .y(d => y(d.revenue));
+
+  // draw lines
+  g.selectAll(".line")
+    .data(series)
+    .enter()
+    .append("path")
+    .attr("fill","none")
+    .attr("stroke", d => color(d.region))
+    .attr("stroke-width",2.5)
+    .attr("d", d => line(d.values));
+
+  // legend
+  const legend = svg.append("g")
+    .attr("transform", `translate(${margin.left + innerW + 30}, 60)`);
+
+  legend.append("text")
+    .attr("class","legend-title")
+    .attr("y",-10)
+    .text("Region");
+
+  regions.forEach((region,i) => {
+    const row = legend.append("g")
+      .attr("transform",`translate(0,${i*25})`);
+
+    row.append("rect")
+      .attr("width",14)
+      .attr("height",14)
+      .attr("fill",color(region));
+
+    row.append("text")
+      .attr("x",20)
+      .attr("y",12)
+      .text(region);
+  });
+
+});
+</script>
+
+</body>
+</html>
