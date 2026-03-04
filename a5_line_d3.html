@@ -10,17 +10,6 @@
 <style>
 body { font-family: Arial, sans-serif; margin: 40px; }
 .title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
-
-.tooltip {
-  position: absolute;
-  pointer-events: none;
-  background: white;
-  border: 1px solid #ccc;
-  padding: 6px;
-  font-size: 12px;
-  opacity: 0;
-}
-
 .legend-title { font-size: 12px; font-weight: bold; }
 </style>
 </head>
@@ -28,35 +17,34 @@ body { font-family: Arial, sans-serif; margin: 40px; }
 <body>
 
 <div class="title">
-BMW Revenue Over Time by Region
+BMW Revenue Over Time by Region (Yearly Totals)
 </div>
 
 <svg id="chart" width="950" height="550"></svg>
-<div id="tooltip" class="tooltip"></div>
 
 <script>
 
 /*
 CITATIONS:
 
-D3 official documentation for time scales, axes, and line generators:
+D3 official documentation for time scales, axes, line generators, and rollups:
    https://d3js.org/d3-scale/time
    https://d3js.org/d3-axis
    https://d3js.org/d3-shape/line
+   https://d3js.org/d3-array  (rollups / grouping)
 
 Time-series line chart structure adapted from:
-   D3 Graph Gallery – Line Chart
+   D3 Graph Gallery – Line Chart (basic structure)
    https://d3-graph-gallery.com/graph/line_basic.html
 */
 
 const CSV = "bmw_sales.csv";
 
 const svg = d3.select("#chart");
-
 const width = +svg.attr("width");
 const height = +svg.attr("height");
 
-const margin = { top: 40, right: 220, bottom: 60, left: 100 };
+const margin = { top: 40, right: 220, bottom: 60, left: 110 };
 const innerW = width - margin.left - margin.right;
 const innerH = height - margin.top - margin.bottom;
 
@@ -64,31 +52,36 @@ const g = svg.append("g")
   .attr("transform", `translate(${margin.left},${margin.top})`);
 
 d3.csv(CSV, d => ({
-  date: new Date(+d.Year, +d.Month - 1),
+  year: +d.Year,
   region: d.Region,
   revenue: +d.Revenue_EUR
 }))
-.then(data => {
+.then(rows => {
 
-  // Sum revenue per region per month
+  // Sum revenue per (region, year)
   const grouped = d3.rollups(
-    data,
+    rows,
     v => d3.sum(v, d => d.revenue),
     d => d.region,
-    d => d3.timeMonth(d.date)
+    d => d.year
   );
 
   const regions = grouped.map(d => d[0]);
 
-  const series = grouped.map(([region, values]) => ({
+  // Convert to "series" format for line drawing
+  const series = grouped.map(([region, yearArr]) => ({
     region,
-    values: values
-      .map(([date, revenue]) => ({date, revenue}))
-      .sort((a,b) => d3.ascending(a.date,b.date))
+    values: yearArr
+      .map(([year, revenue]) => ({
+        date: new Date(year, 0, 1), // time on x-axis (year)
+        year,
+        revenue
+      }))
+      .sort((a,b) => d3.ascending(a.year, b.year))
   }));
 
-  const allDates = series.flatMap(d => d.values.map(v => v.date));
-  const allRevenue = series.flatMap(d => d.values.map(v => v.revenue));
+  const allDates = series.flatMap(s => s.values.map(v => v.date));
+  const allRevenue = series.flatMap(s => s.values.map(v => v.revenue));
 
   const x = d3.scaleTime()
     .domain(d3.extent(allDates))
@@ -102,10 +95,10 @@ d3.csv(CSV, d => ({
     .domain(regions)
     .range(d3.schemeTableau10);
 
-  // axes
+  // Axes (clean, not too many ticks)
   g.append("g")
     .attr("transform", `translate(0,${innerH})`)
-    .call(d3.axisBottom(x).ticks(d3.timeYear.every(1)));
+    .call(d3.axisBottom(x).ticks(d3.timeYear.every(1)).tickFormat(d3.timeFormat("%Y")));
 
   g.append("g")
     .call(
@@ -114,7 +107,7 @@ d3.csv(CSV, d => ({
         .tickFormat(d => "€" + (d/1_000_000_000).toFixed(0) + "B")
     );
 
-  // axis labels
+  // Axis labels
   svg.append("text")
     .attr("x", margin.left + innerW/2)
     .attr("y", height - 15)
@@ -124,7 +117,7 @@ d3.csv(CSV, d => ({
   svg.append("text")
     .attr("transform","rotate(-90)")
     .attr("x", -(margin.top + innerH/2))
-    .attr("y", 30)
+    .attr("y", 35)
     .attr("text-anchor","middle")
     .text("Revenue (EUR)");
 
@@ -132,37 +125,51 @@ d3.csv(CSV, d => ({
     .x(d => x(d.date))
     .y(d => y(d.revenue));
 
-  // draw lines
+  // Draw the lines (one per region)
   g.selectAll(".line")
     .data(series)
     .enter()
     .append("path")
     .attr("fill","none")
     .attr("stroke", d => color(d.region))
-    .attr("stroke-width",2.5)
+    .attr("stroke-width", 3)
     .attr("d", d => line(d.values));
 
-  // legend
+  // Add points to make yearly values obvious
+  g.selectAll(".points")
+    .data(series)
+    .enter()
+    .append("g")
+    .selectAll("circle")
+    .data(d => d.values.map(v => ({...v, region: d.region})))
+    .enter()
+    .append("circle")
+    .attr("cx", d => x(d.date))
+    .attr("cy", d => y(d.revenue))
+    .attr("r", 4)
+    .attr("fill", d => color(d.region));
+
+  // Legend
   const legend = svg.append("g")
-    .attr("transform", `translate(${margin.left + innerW + 30}, 60)`);
+    .attr("transform", `translate(${margin.left + innerW + 30}, 70)`);
 
   legend.append("text")
     .attr("class","legend-title")
     .attr("y",-10)
     .text("Region");
 
-  regions.forEach((region,i) => {
+  regions.forEach((region, i) => {
     const row = legend.append("g")
-      .attr("transform",`translate(0,${i*25})`);
+      .attr("transform", `translate(0, ${i * 25})`);
 
     row.append("rect")
-      .attr("width",14)
-      .attr("height",14)
-      .attr("fill",color(region));
+      .attr("width", 14)
+      .attr("height", 14)
+      .attr("fill", color(region));
 
     row.append("text")
-      .attr("x",20)
-      .attr("y",12)
+      .attr("x", 20)
+      .attr("y", 12)
       .text(region);
   });
 
