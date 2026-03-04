@@ -1,0 +1,259 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Scatterplot Matrix in D3</title>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+
+<style>
+body { font-family: Arial, sans-serif; margin: 40px; }
+.title { font-size: 18px; font-weight: bold; margin-bottom: 10px; }
+.note { color: #444; margin: 8px 0 18px; max-width: 980px; }
+.cell rect.frame { fill: none; stroke: #ccc; }
+.cell circle { opacity: 0.6; }
+.axis text { font-size: 10px; }
+.axis path, .axis line { stroke: #ccc; }
+.legend-title { font-size: 12px; font-weight: bold; }
+.tooltip {
+  position: absolute;
+  pointer-events: none;
+  background: white;
+  border: 1px solid #ccc;
+  padding: 6px;
+  border-radius: 6px;
+  font-size: 12px;
+  opacity: 0;
+}
+</style>
+</head>
+
+<body>
+
+<div class="title">
+BMW Scatterplot Matrix (3×3)
+</div>
+
+<div class="note">
+Each point is a (Region, Model, Month, Year) row from the CSV. The matrix compares 3 numeric variables:
+Units_Sold, Avg_Price_EUR, and BEV_Share. Color indicates Region.
+</div>
+
+<svg id="chart" width="980" height="980"></svg>
+<div id="tooltip" class="tooltip"></div>
+
+<script>
+
+/*
+CITATIONS:
+
+D3 official documentation for scales, axes, and brushing/event handling:
+   https://d3js.org/d3-scale
+   https://d3js.org/d3-axis
+
+Scatterplot matrix concept + layout approach adapted from:
+   Mike Bostock (D3) – Scatterplot Matrix example
+   https://observablehq.com/@d3/scatterplot-matrix
+   (overall matrix layout idea: small multiples of scatterplots)
+
+All code written manually for this assignment using D3 v7 API.
+*/
+
+const CSV = "bmw_sales.csv";
+
+const svg = d3.select("#chart");
+const tooltip = d3.select("#tooltip");
+
+const width = +svg.attr("width");
+const height = +svg.attr("height");
+
+const vars = [
+  { key: "units", label: "Units Sold" },
+  { key: "price", label: "Avg Price (EUR)" },
+  { key: "bev", label: "BEV Share" }
+];
+
+const n = vars.length;
+
+// Layout for the matrix
+const padding = 30;
+const margin = { top: 70, right: 220, bottom: 70, left: 80 };
+const size = Math.floor((Math.min(width - margin.left - margin.right, height - margin.top - margin.bottom)) / n);
+
+const plotW = size;
+const plotH = size;
+
+const g = svg.append("g")
+  .attr("transform", `translate(${margin.left},${margin.top})`);
+
+d3.csv(CSV, d => ({
+  year: +d.Year,
+  month: +d.Month,
+  region: d.Region,
+  model: d.Model,
+  units: +d.Units_Sold,
+  price: +d.Avg_Price_EUR,
+  bev: +d.BEV_Share
+}))
+.then(data => {
+
+  // Optional: cap to keep rendering snappy (still from CSV)
+  const MAX_POINTS = 2000;
+  if (data.length > MAX_POINTS) data = d3.shuffle(data).slice(0, MAX_POINTS);
+
+  const regions = Array.from(new Set(data.map(d => d.region)));
+  const color = d3.scaleOrdinal()
+    .domain(regions)
+    .range(d3.schemeTableau10);
+
+  // One scale per variable (shared across its row/col)
+  const xScales = new Map();
+  const yScales = new Map();
+
+  vars.forEach(v => {
+    xScales.set(v.key,
+      d3.scaleLinear()
+        .domain(d3.extent(data, d => d[v.key])).nice()
+        .range([padding, plotW - padding])
+    );
+
+    yScales.set(v.key,
+      d3.scaleLinear()
+        .domain(d3.extent(data, d => d[v.key])).nice()
+        .range([plotH - padding, padding])
+    );
+  });
+
+  // axis generators (small ticks)
+  const xAxis = key => d3.axisBottom(xScales.get(key)).ticks(4);
+  const yAxis = key => d3.axisLeft(yScales.get(key)).ticks(4);
+
+  // Create all cells (i, j)
+  const cell = g.selectAll(".cell")
+    .data(d3.cross(d3.range(n), d3.range(n)))
+    .enter()
+    .append("g")
+    .attr("class", "cell")
+    .attr("transform", ([i, j]) => `translate(${i * plotW}, ${j * plotH})`);
+
+  // frame around each cell
+  cell.append("rect")
+    .attr("class", "frame")
+    .attr("x", 0)
+    .attr("y", 0)
+    .attr("width", plotW)
+    .attr("height", plotH);
+
+  // axes: bottom row x axes
+  g.selectAll(".x.axis")
+    .data(d3.range(n))
+    .enter()
+    .append("g")
+    .attr("class", "x axis")
+    .attr("transform", i => `translate(${i * plotW}, ${n * plotH})`)
+    .call(i => i.call(xAxis(vars[i].key)));
+
+  // axes: left column y axes
+  g.selectAll(".y.axis")
+    .data(d3.range(n))
+    .enter()
+    .append("g")
+    .attr("class", "y axis")
+    .attr("transform", j => `translate(0, ${j * plotH})`)
+    .call(j => j.call(yAxis(vars[j].key)));
+
+  // variable labels
+  g.selectAll(".x.label")
+    .data(d3.range(n))
+    .enter()
+    .append("text")
+    .attr("x", i => i * plotW + plotW / 2)
+    .attr("y", n * plotH + 45)
+    .attr("text-anchor", "middle")
+    .style("font-size", "12px")
+    .text(i => vars[i].label);
+
+  g.selectAll(".y.label")
+    .data(d3.range(n))
+    .enter()
+    .append("text")
+    .attr("transform", j => `translate(-55, ${j * plotH + plotH / 2}) rotate(-90)`)
+    .attr("text-anchor", "middle")
+    .style("font-size", "12px")
+    .text(j => vars[j].label);
+
+  // Draw points in each cell
+  cell.each(function([i, j]) {
+    const xKey = vars[i].key;
+    const yKey = vars[j].key;
+
+    const cx = xScales.get(xKey);
+    const cy = yScales.get(yKey);
+
+    const cellG = d3.select(this);
+
+    cellG.selectAll("circle")
+      .data(data)
+      .enter()
+      .append("circle")
+      .attr("cx", d => cx(d[xKey]))
+      .attr("cy", d => cy(d[yKey]))
+      .attr("r", 2.2)
+      .attr("fill", d => color(d.region))
+      .on("mouseenter", (event, d) => {
+        tooltip
+          .style("opacity", 1)
+          .style("left", (event.pageX + 10) + "px")
+          .style("top", (event.pageY + 10) + "px")
+          .html(
+            `<b>Region:</b> ${d.region}<br>
+             <b>Model:</b> ${d.model}<br>
+             <b>Date:</b> ${d.year}-${String(d.month).padStart(2,"0")}<br>
+             <b>Units:</b> ${d.units}<br>
+             <b>Avg Price:</b> €${Math.round(d.price).toLocaleString()}<br>
+             <b>BEV Share:</b> ${d.bev}`
+          );
+
+        // highlight same row across the entire matrix (simple extra credit-ish)
+        d3.selectAll(".cell circle").attr("opacity", 0.12);
+        d3.selectAll(".cell circle")
+          .filter(p => p === d)
+          .attr("opacity", 1)
+          .attr("r", 4);
+      })
+      .on("mouseleave", () => {
+        tooltip.style("opacity", 0);
+        d3.selectAll(".cell circle").attr("opacity", 0.6).attr("r", 2.2);
+      });
+  });
+
+  // Legend
+  const legend = svg.append("g")
+    .attr("transform", `translate(${width - 200}, 120)`);
+
+  legend.append("text")
+    .attr("class", "legend-title")
+    .attr("y", -10)
+    .text("Region");
+
+  regions.forEach((region, i) => {
+    const row = legend.append("g")
+      .attr("transform", `translate(0, ${i * 25})`);
+
+    row.append("rect")
+      .attr("width", 14)
+      .attr("height", 14)
+      .attr("fill", color(region));
+
+    row.append("text")
+      .attr("x", 20)
+      .attr("y", 12)
+      .text(region);
+  });
+
+});
+</script>
+
+</body>
+</html>
