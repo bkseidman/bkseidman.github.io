@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignment 6 — Sequential Bar Chart</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://unpkg.com/d3-svg-legend@2.25.6/indexRollup.js"></script>
+    <style>
+      body { font-family: Arial, sans-serif; margin: 30px; }
+      h1 { margin-bottom: 8px; }
+      p { margin-top: 0; color: #444; }
+      svg { background: white; }
+      .axis-label { font-size: 16px; font-weight: 600; }
+      .tick text { font-size: 13px; }
+      .chart-title { font-size: 24px; font-weight: 700; }
+    </style>
+  </head>
+
+  <body>
+    <h1>Sequential Bar Chart</h1>
+    <p>Average alcohol content by wine quality, colored with a sequential scale.</p>
+
+    <svg id="chart" width="1000" height="650"></svg>
+
+    <script>
+    /*
+    CITATIONS:
+
+    D3 official documentation for scales and axes:
+       https://d3js.org/d3-scale
+       https://d3js.org/d3-axis
+
+    Sequential color scale usage adapted from:
+       D3 Sequential Scales documentation
+       https://d3js.org/d3-scale/sequential
+
+    Color legend implementation using:
+       Susie Lu — d3-legend
+       https://d3-legend.susielu.com/
+    */
+
+      const svg = d3.select("#chart");
+      const width = +svg.attr("width");
+      const height = +svg.attr("height");
+
+      const margin = { top: 70, right: 180, bottom: 90, left: 90 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+
+      const g = svg
+        .append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      d3.text("winequality-red.csv").then(raw => {
+        const data = d3.dsvFormat(";").parse(raw, d => ({
+          quality: +d.quality,
+          alcohol: +d.alcohol
+        }));
+
+        const rolled = Array.from(
+          d3.rollup(
+            data,
+            v => d3.mean(v, d => d.alcohol),
+            d => d.quality
+          ),
+          ([quality, avgAlcohol]) => ({
+            quality,
+            avgAlcohol
+          })
+        ).sort((a, b) => d3.ascending(a.quality, b.quality));
+
+        const x = d3.scaleBand()
+          .domain(rolled.map(d => d.quality))
+          .range([0, innerWidth])
+          .padding(0.2);
+
+        const y = d3.scaleLinear()
+          .domain([0, d3.max(rolled, d => d.avgAlcohol) * 1.1])
+          .nice()
+          .range([innerHeight, 0]);
+
+        const color = d3.scaleSequential()
+          .domain(d3.extent(rolled, d => d.avgAlcohol))
+          .interpolator(d3.interpolateBlues);
+
+        g.append("g")
+          .call(d3.axisLeft(y));
+
+        g.append("g")
+          .attr("transform", `translate(0,${innerHeight})`)
+          .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+        g.selectAll(".bar")
+          .data(rolled)
+          .enter()
+          .append("rect")
+          .attr("x", d => x(d.quality))
+          .attr("y", d => y(d.avgAlcohol))
+          .attr("width", x.bandwidth())
+          .attr("height", d => innerHeight - y(d.avgAlcohol))
+          .attr("fill", d => color(d.avgAlcohol));
+
+        g.append("text")
+          .attr("class", "chart-title")
+          .attr("x", innerWidth / 2)
+          .attr("y", -25)
+          .attr("text-anchor", "middle")
+          .text("Average Alcohol Content by Wine Quality");
+
+        g.append("text")
+          .attr("class", "axis-label")
+          .attr("x", innerWidth / 2)
+          .attr("y", innerHeight + 60)
+          .attr("text-anchor", "middle")
+          .text("Quality Score");
+
+        g.append("text")
+          .attr("class", "axis-label")
+          .attr("transform", "rotate(-90)")
+          .attr("x", -innerHeight / 2)
+          .attr("y", -55)
+          .attr("text-anchor", "middle")
+          .text("Average Alcohol");
+
+        const legendScale = d3.scaleSequential()
+          .domain(color.domain())
+          .interpolator(d3.interpolateBlues);
+
+        const legendGroup = svg.append("g")
+          .attr("transform", `translate(${width - 120}, ${margin.top + 80})`);
+
+        const legend = d3.legendColor()
+          .scale(legendScale)
+          .shapeWidth(30)
+          .shapeHeight(20)
+          .cells(6)
+          .orient("vertical")
+          .labelFormat(d3.format(".2f"))
+          .title("Average alcohol");
+
+        legendGroup.call(legend);
+      });
+    </script>
+  </body>
+</html>a
