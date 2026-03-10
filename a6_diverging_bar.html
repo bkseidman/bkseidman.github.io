@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 6 — Diverging Bar Chart</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; }
+    .axis-label { font-size: 16px; font-weight: 600; }
+    .tick text { font-size: 13px; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+  </style>
+</head>
+
+<body>
+  <h1>Diverging Bar Chart</h1>
+  <p>Deviation of average alcohol by wine quality from the overall mean, colored with a diverging scale.</p>
+
+  <svg id="chart" width="1200" height="680"></svg>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for scales and axes:
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-axis
+
+  Diverging color scale usage adapted from:
+     D3 Diverging Scales documentation
+     https://d3js.org/d3-scale/diverging
+
+  Color legend implementation using:
+     Susie Lu — d3-legend
+     https://d3-legend.susielu.com/
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 80, right: 280, bottom: 100, left: 100 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("winequality-red.csv", d => ({
+      quality: +d.quality,
+      alcohol: +d.alcohol
+    })).then(data => {
+      const cleaned = data.filter(d =>
+        Number.isFinite(d.quality) && Number.isFinite(d.alcohol)
+      );
+
+      const overallMean = d3.mean(cleaned, d => d.alcohol);
+
+      const rolled = Array.from(
+        d3.rollup(
+          cleaned,
+          v => d3.mean(v, d => d.alcohol),
+          d => d.quality
+        ),
+        ([quality, avgAlcohol]) => ({
+          quality,
+          avgAlcohol,
+          deviation: avgAlcohol - overallMean
+        })
+      ).sort((a, b) => d3.ascending(a.quality, b.quality));
+
+      const maxAbs = d3.max(rolled, d => Math.abs(d.deviation));
+
+      const x = d3.scaleBand()
+        .domain(rolled.map(d => d.quality))
+        .range([0, innerWidth])
+        .padding(0.2);
+
+      const y = d3.scaleLinear()
+        .domain([-maxAbs * 1.15, maxAbs * 1.15])
+        .nice()
+        .range([innerHeight, 0]);
+
+      const color = d3.scaleDiverging()
+        .domain([-maxAbs, 0, maxAbs])
+        .interpolator(d3.interpolateRdBu);
+
+      g.append("g")
+        .call(d3.axisLeft(y));
+
+      g.append("g")
+        .attr("transform", `translate(0,${y(0)})`)
+        .call(d3.axisBottom(x).tickFormat(d3.format("d")));
+
+      g.append("line")
+        .attr("x1", 0)
+        .attr("x2", innerWidth)
+        .attr("y1", y(0))
+        .attr("y2", y(0))
+        .attr("stroke", "#333")
+        .attr("stroke-width", 1.5);
+
+      g.selectAll("rect.bar")
+        .data(rolled)
+        .enter()
+        .append("rect")
+        .attr("class", "bar")
+        .attr("x", d => x(d.quality))
+        .attr("width", x.bandwidth())
+        .attr("y", d => d.deviation >= 0 ? y(d.deviation) : y(0))
+        .attr("height", d => Math.abs(y(d.deviation) - y(0)))
+        .attr("fill", d => color(d.deviation));
+
+      g.append("text")
+        .attr("class", "chart-title")
+        .attr("x", innerWidth / 2)
+        .attr("y", -30)
+        .attr("text-anchor", "middle")
+        .text("Deviation from Overall Mean Alcohol by Wine Quality");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 70)
+        .attr("text-anchor", "middle")
+        .text("Quality Score");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -65)
+        .attr("text-anchor", "middle")
+        .text("Deviation from Overall Mean Alcohol");
+
+      const legendValues = d3.range(7).map(i =>
+        d3.interpolate(-maxAbs, maxAbs)(i / 6)
+      );
+
+      const legendScale = d3.scaleOrdinal()
+        .domain(legendValues.map(v => d3.format(".2f")(v)))
+        .range(legendValues.map(v => color(v)));
+
+      const legendGroup = svg.append("g")
+        .attr("transform", `translate(${margin.left + innerWidth + 50}, ${margin.top + 130})`);
+
+      const legend = d3.legendColor()
+        .scale(legendScale)
+        .shapeWidth(32)
+        .shapeHeight(22)
+        .shapePadding(5)
+        .orient("vertical")
+        .title("Alcohol deviation");
+
+      legendGroup.call(legend);
+    });
+  </script>
+</body>
+</html>
