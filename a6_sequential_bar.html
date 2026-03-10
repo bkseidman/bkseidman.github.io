@@ -53,7 +53,7 @@
     const g = svg.append("g")
       .attr("transform", `translate(${margin.left},${margin.top})`);
 
-    d3.tsv("winequality-red.csv", d => ({
+    d3.csv("winequality-red.csv", d => ({
       quality: +d.quality,
       alcohol: +d.alcohol
     })).then(data => {
@@ -67,7 +67,10 @@
           v => d3.mean(v, d => d.alcohol),
           d => d.quality
         ),
-        ([quality, avgAlcohol]) => ({ quality, avgAlcohol })
+        ([quality, avgAlcohol]) => ({
+          quality,
+          avgAlcohol
+        })
       ).sort((a, b) => d3.ascending(a.quality, b.quality));
 
       const x = d3.scaleBand()
