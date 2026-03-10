@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 6 — Scatterplot</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; }
+    .axis-label { font-size: 16px; font-weight: 600; }
+    .tick text { font-size: 13px; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+  </style>
+</head>
+
+<body>
+  <h1>Scatterplot</h1>
+  <p>Alcohol vs. volatile acidity, colored by wine quality category.</p>
+
+  <svg id="chart" width="1200" height="700"></svg>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for scales and axes:
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-axis
+
+  D3 official documentation for scatterplots using circles and quantitative scales:
+     https://d3js.org/d3-shape
+     https://d3js.org/d3-selection
+
+  Qualitative color scale usage adapted from:
+     D3 Ordinal Scales documentation
+     https://d3js.org/d3-scale/ordinal
+
+  Color legend implementation using:
+     Susie Lu — d3-legend
+     https://d3-legend.susielu.com/
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 80, right: 260, bottom: 90, left: 100 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    d3.csv("winequality-red.csv", d => ({
+      alcohol: +d.alcohol,
+      volatileAcidity: +d["volatile acidity"],
+      quality: String(d.quality)
+    })).then(data => {
+      const cleaned = data.filter(d =>
+        Number.isFinite(d.alcohol) &&
+        Number.isFinite(d.volatileAcidity) &&
+        d.quality !== "undefined"
+      );
+
+      const qualityOrder = ["3", "4", "5", "6", "7", "8"].filter(q =>
+        cleaned.some(d => d.quality === q)
+      );
+
+      const x = d3.scaleLinear()
+        .domain(d3.extent(cleaned, d => d.alcohol))
+        .nice()
+        .range([0, innerWidth]);
+
+      const y = d3.scaleLinear()
+        .domain(d3.extent(cleaned, d => d.volatileAcidity))
+        .nice()
+        .range([innerHeight, 0]);
+
+      const color = d3.scaleOrdinal()
+        .domain(qualityOrder)
+        .range(d3.schemeSet2.slice(0, qualityOrder.length));
+
+      g.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(d3.axisBottom(x));
+
+      g.append("g")
+        .call(d3.axisLeft(y));
+
+      g.selectAll("circle.point")
+        .data(cleaned)
+        .enter()
+        .append("circle")
+        .attr("class", "point")
+        .attr("cx", d => x(d.alcohol))
+        .attr("cy", d => y(d.volatileAcidity))
+        .attr("r", 4.5)
+        .attr("fill", d => color(d.quality))
+        .attr("opacity", 0.75);
+
+      g.append("text")
+        .attr("class", "chart-title")
+        .attr("x", innerWidth / 2)
+        .attr("y", -30)
+        .attr("text-anchor", "middle")
+        .text("Alcohol vs. Volatile Acidity by Wine Quality");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 60)
+        .attr("text-anchor", "middle")
+        .text("Alcohol");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -65)
+        .attr("text-anchor", "middle")
+        .text("Volatile Acidity");
+
+      const legendGroup = svg.append("g")
+        .attr("transform", `translate(${margin.left + innerWidth + 50}, ${margin.top + 120})`);
+
+      const legend = d3.legendColor()
+        .scale(color)
+        .shape("circle")
+        .shapeRadius(7)
+        .shapePadding(8)
+        .orient("vertical")
+        .title("Wine quality");
+
+      legendGroup.call(legend);
+    });
+  </script>
+</body>
+</html>
