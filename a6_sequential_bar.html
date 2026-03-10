@@ -23,7 +23,7 @@
   <h1>Sequential Bar Chart</h1>
   <p>Average alcohol content by wine quality, colored with a sequential scale.</p>
 
-  <svg id="chart" width="1000" height="650"></svg>
+  <svg id="chart" width="1200" height="650"></svg>
 
   <script>
   /*
@@ -46,7 +46,7 @@
     const width = +svg.attr("width");
     const height = +svg.attr("height");
 
-    const margin = { top: 70, right: 180, bottom: 90, left: 90 };
+    const margin = { top: 70, right: 260, bottom: 90, left: 90 };
     const innerWidth = width - margin.left - margin.right;
     const innerHeight = height - margin.top - margin.bottom;
 
@@ -131,7 +131,14 @@
         .interpolator(d3.interpolateBlues);
 
       const legendGroup = svg.append("g")
-        .attr("transform", `translate(${width - 140}, ${margin.top + 80})`);
+        .attr("transform", `translate(${width - 170}, ${margin.top + 100})`);
+
+      legendGroup.append("text")
+        .attr("x", 0)
+        .attr("y", -15)
+        .attr("font-size", 14)
+        .attr("font-weight", "600")
+        .text("Average alcohol");
 
       const legend = d3.legendColor()
         .scale(legendScale)
@@ -139,8 +146,7 @@
         .shapeHeight(20)
         .cells(6)
         .orient("vertical")
-        .labelFormat(d3.format(".2f"))
-        .title("Average alcohol");
+        .labelFormat(d3.format(".2f"));
 
       legendGroup.call(legend);
     });
