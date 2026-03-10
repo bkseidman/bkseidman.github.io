@@ -126,27 +126,29 @@
         .attr("text-anchor", "middle")
         .text("Average Alcohol");
 
-      const legendScale = d3.scaleSequential()
-        .domain(color.domain())
-        .interpolator(d3.interpolateBlues);
+      const legendValues = d3.range(6).map(i =>
+        d3.interpolate(
+          d3.min(rolled, d => d.avgAlcohol),
+          d3.max(rolled, d => d.avgAlcohol)
+        )(i / 5)
+      );
+
+      const legendColors = legendValues.map(v => color(v));
+
+      const legendScale = d3.scaleOrdinal()
+        .domain(legendValues.map(v => v.toFixed(2)))
+        .range(legendColors);
 
       const legendGroup = svg.append("g")
         .attr("transform", `translate(${width - 170}, ${margin.top + 100})`);
-
-      legendGroup.append("text")
-        .attr("x", 0)
-        .attr("y", -15)
-        .attr("font-size", 14)
-        .attr("font-weight", "600")
-        .text("Average alcohol");
 
       const legend = d3.legendColor()
         .scale(legendScale)
         .shapeWidth(30)
         .shapeHeight(20)
-        .cells(6)
+        .shapePadding(4)
         .orient("vertical")
-        .labelFormat(d3.format(".2f"));
+        .title("Average alcohol");
 
       legendGroup.call(legend);
     });
