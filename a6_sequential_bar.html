@@ -6,7 +6,7 @@
   <title>Assignment 6 — Sequential Bar Chart</title>
 
   <script src="https://d3js.org/d3.v7.min.js"></script>
-  <script src="https://unpkg.com/d3-svg-legend@2.25.6/indexRollup.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
 
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; }
@@ -94,10 +94,11 @@
         .attr("transform", `translate(0,${innerHeight})`)
         .call(d3.axisBottom(x).tickFormat(d3.format("d")));
 
-      g.selectAll("rect")
+      g.selectAll("rect.bar")
         .data(rolled)
         .enter()
         .append("rect")
+        .attr("class", "bar")
         .attr("x", d => x(d.quality))
         .attr("y", d => y(d.avgAlcohol))
         .attr("width", x.bandwidth())
@@ -133,14 +134,12 @@
         )(i / 5)
       );
 
-      const legendColors = legendValues.map(v => color(v));
-
       const legendScale = d3.scaleOrdinal()
         .domain(legendValues.map(v => v.toFixed(2)))
-        .range(legendColors);
+        .range(legendValues.map(v => color(v)));
 
       const legendGroup = svg.append("g")
-        .attr("transform", `translate(${width - 170}, ${margin.top + 100})`);
+        .attr("transform", `translate(${margin.left + innerWidth + 40}, ${margin.top + 120})`);
 
       const legend = d3.legendColor()
         .scale(legendScale)
