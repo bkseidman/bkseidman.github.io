@@ -1,0 +1,217 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 7 — Streamgraph</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+    .axis-label { font-size: 16px; font-weight: 600; }
+    .tick text { font-size: 13px; }
+    .layer {
+      opacity: 0.85;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Streamgraph</h1>
+  <p>Streamgraph of the Case-Shiller home price index for five U.S. cities.</p>
+
+  <svg id="chart" width="1300" height="700"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for stack, stack offsets, areas, scales, axes, time parsing, and CSV loading:
+     https://d3js.org/d3-shape/stack
+     https://d3js.org/d3-shape/area
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-axis
+     https://d3js.org/d3-time-format
+     https://d3js.org/d3-fetch
+
+  Color legend implementation using:
+     Susie Lu — d3-legend
+     https://d3-legend.susielu.com/
+
+  Tooltip interaction pattern adapted from general D3 mouse event usage:
+     https://d3js.org/d3-selection/events
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 70, right: 260, bottom: 90, left: 90 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const tooltip = d3.select("#tooltip");
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const formatDate = d3.timeFormat("%B %Y");
+
+    const cities = [
+      "CA-San Francisco",
+      "CA-Los Angeles",
+      "AZ-Phoenix",
+      "CO-Denver",
+      "NY-New York"
+    ];
+
+    d3.csv("cities-month-SA.csv", d => ({
+      date: parseDate(d.Date),
+      "CA-San Francisco": +d["CA-San Francisco"],
+      "CA-Los Angeles": +d["CA-Los Angeles"],
+      "AZ-Phoenix": +d["AZ-Phoenix"],
+      "CO-Denver": +d["CO-Denver"],
+      "NY-New York": +d["NY-New York"]
+    })).then(data => {
+      const cleaned = data.filter(d =>
+        d.date &&
+        cities.every(city => Number.isFinite(d[city]))
+      );
+
+      const stack = d3.stack()
+        .keys(cities)
+        .offset(d3.stackOffsetWiggle);
+
+      const stackedData = stack(cleaned);
+
+      const x = d3.scaleTime()
+        .domain(d3.extent(cleaned, d => d.date))
+        .range([0, innerWidth]);
+
+      const y = d3.scaleLinear()
+        .domain([
+          d3.min(stackedData, layer => d3.min(layer, d => d[0])),
+          d3.max(stackedData, layer => d3.max(layer, d => d[1]))
+        ])
+        .range([innerHeight, 0]);
+
+      const color = d3.scaleOrdinal()
+        .domain(cities)
+        .range(d3.schemeTableau10.slice(0, cities.length));
+
+      const xAxis = d3.axisBottom(x).ticks(10);
+      const yAxis = d3.axisLeft(y);
+
+      g.append("g")
+        .call(yAxis);
+
+      g.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(xAxis);
+
+      const area = d3.area()
+        .x(d => x(d.data.date))
+        .y0(d => y(d[0]))
+        .y1(d => y(d[1]))
+        .curve(d3.curveBasis);
+
+      g.selectAll("path.stream-layer")
+        .data(stackedData)
+        .enter()
+        .append("path")
+        .attr("class", "layer stream-layer")
+        .attr("fill", d => color(d.key))
+        .attr("d", area)
+        .on("mouseover", function(event, d) {
+          d3.select(this).attr("opacity", 1);
+
+          tooltip
+            .style("opacity", 1)
+            .html(`<strong>${d.key}</strong>`);
+        })
+        .on("mousemove", function(event, d) {
+          const [mx] = d3.pointer(event, this);
+          const xDate = x.invert(mx);
+
+          let closest = d[0];
+          let smallestDiff = Math.abs(xDate - d[0].data.date);
+
+          d.forEach(point => {
+            const diff = Math.abs(xDate - point.data.date);
+            if (diff < smallestDiff) {
+              smallestDiff = diff;
+              closest = point;
+            }
+          });
+
+          const city = d.key;
+          const value = closest.data[city];
+
+          tooltip
+            .html(
+              `<strong>${city}</strong><br>` +
+              `Date: ${formatDate(closest.data.date)}<br>` +
+              `Index: ${value.toFixed(2)}`
+            )
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this).attr("opacity", 0.85);
+          tooltip.style("opacity", 0);
+        });
+
+      g.append("text")
+        .attr("class", "chart-title")
+        .attr("x", innerWidth / 2)
+        .attr("y", -25)
+        .attr("text-anchor", "middle")
+        .text("Streamgraph of Home Price Index by City");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 60)
+        .attr("text-anchor", "middle")
+        .text("Date");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -55)
+        .attr("text-anchor", "middle")
+        .text("Stacked Index Value");
+
+      const legendGroup = svg.append("g")
+        .attr("transform", `translate(${margin.left + innerWidth + 40}, ${margin.top + 120})`);
+
+      const legend = d3.legendColor()
+        .scale(color)
+        .shape("path", d3.symbol().type(d3.symbolSquare).size(140)())
+        .shapePadding(8)
+        .title("Cities");
+
+      legendGroup.call(legend);
+    });
+  </script>
+</body>
+</html>
