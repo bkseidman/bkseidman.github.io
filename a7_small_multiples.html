@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 7 — Small Multiples</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+    .axis-label { font-size: 16px; font-weight: 600; }
+    .small-title { font-size: 15px; font-weight: 600; }
+    .tick text { font-size: 11px; }
+    .small-line {
+      fill: none;
+      stroke-width: 2.5;
+    }
+    .panel-border {
+      fill: none;
+      stroke: #ccc;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Small Multiples Line Chart</h1>
+  <p>Small multiples of the Case-Shiller home price index for five U.S. cities.</p>
+
+  <svg id="chart" width="1300" height="900"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for scales, axes, lines, time parsing, CSV loading, and arrays:
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-axis
+     https://d3js.org/d3-shape/line
+     https://d3js.org/d3-time-format
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-array
+
+  Color legend implementation using:
+     Susie Lu — d3-legend
+     https://d3-legend.susielu.com/
+
+  Tooltip interaction pattern adapted from general D3 mouse event usage:
+     https://d3js.org/d3-selection/events
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 80, right: 250, bottom: 90, left: 80 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const tooltip = d3.select("#tooltip");
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const formatDate = d3.timeFormat("%B %Y");
+
+    const cities = [
+      "CA-San Francisco",
+      "CA-Los Angeles",
+      "AZ-Phoenix",
+      "CO-Denver",
+      "NY-New York"
+    ];
+
+    d3.csv("cities-month-SA.csv", d => ({
+      date: parseDate(d.Date),
+      "CA-San Francisco": +d["CA-San Francisco"],
+      "CA-Los Angeles": +d["CA-Los Angeles"],
+      "AZ-Phoenix": +d["AZ-Phoenix"],
+      "CO-Denver": +d["CO-Denver"],
+      "NY-New York": +d["NY-New York"]
+    })).then(data => {
+      const cleaned = data.filter(d =>
+        d.date &&
+        cities.every(city => Number.isFinite(d[city]))
+      );
+
+      const series = cities.map(city => ({
+        name: city,
+        values: cleaned.map(d => ({
+          date: d.date,
+          value: d[city]
+        }))
+      }));
+
+      const color = d3.scaleOrdinal()
+        .domain(cities)
+        .range(d3.schemeTableau10.slice(0, cities.length));
+
+      const columns = 2;
+      const rows = 3;
+      const panelWidth = 420;
+      const panelHeight = 200;
+      const panelGapX = 40;
+      const panelGapY = 45;
+
+      const xDomain = d3.extent(cleaned, d => d.date);
+
+      const yDomain = [
+        d3.min(series, s => d3.min(s.values, d => d.value)),
+        d3.max(series, s => d3.max(s.values, d => d.value))
+      ];
+
+      const line = d3.line()
+        .x(d => d.x)
+        .y(d => d.y);
+
+      series.forEach((cityData, i) => {
+        const col = i % columns;
+        const row = Math.floor(i / columns);
+
+        const panelX = col * (panelWidth + panelGapX);
+        const panelY = row * (panelHeight + panelGapY);
+
+        const panel = g.append("g")
+          .attr("transform", `translate(${panelX},${panelY})`);
+
+        const panelMargin = { top: 30, right: 20, bottom: 40, left: 55 };
+        const plotWidth = panelWidth - panelMargin.left - panelMargin.right;
+        const plotHeight = panelHeight - panelMargin.top - panelMargin.bottom;
+
+        const plot = panel.append("g")
+          .attr("transform", `translate(${panelMargin.left},${panelMargin.top})`);
+
+        const x = d3.scaleTime()
+          .domain(xDomain)
+          .range([0, plotWidth]);
+
+        const y = d3.scaleLinear()
+          .domain(yDomain)
+          .nice()
+          .range([plotHeight, 0]);
+
+        const xAxis = d3.axisBottom(x).ticks(4);
+        const yAxis = d3.axisLeft(y).ticks(5);
+
+        panel.append("rect")
+          .attr("class", "panel-border")
+          .attr("width", panelWidth)
+          .attr("height", panelHeight);
+
+        panel.append("text")
+          .attr("class", "small-title")
+          .attr("x", panelWidth / 2)
+          .attr("y", 20)
+          .attr("text-anchor", "middle")
+          .attr("fill", color(cityData.name))
+          .text(cityData.name);
+
+        plot.append("g")
+          .call(yAxis);
+
+        plot.append("g")
+          .attr("transform", `translate(0,${plotHeight})`)
+          .call(xAxis);
+
+        const mappedValues = cityData.values.map(d => ({
+          date: d.date,
+          value: d.value,
+          x: x(d.date),
+          y: y(d.value)
+        }));
+
+        plot.append("path")
+          .datum(mappedValues)
+          .attr("class", "small-line")
+          .attr("stroke", color(cityData.name))
+          .attr("d", line);
+
+        plot.selectAll("circle")
+          .data(mappedValues)
+          .enter()
+          .append("circle")
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y)
+          .attr("r", 2.8)
+          .attr("fill", color(cityData.name))
+          .on("mouseover", function(event, d) {
+            d3.select(this).attr("r", 5);
+
+            tooltip
+              .style("opacity", 1)
+              .html(
+                `<strong>${cityData.name}</strong><br>` +
+                `Date: ${formatDate(d.date)}<br>` +
+                `Index: ${d.value.toFixed(2)}`
+              );
+          })
+          .on("mousemove", function(event) {
+            tooltip
+              .style("left", (event.pageX + 12) + "px")
+              .style("top", (event.pageY - 28) + "px");
+          })
+          .on("mouseout", function() {
+            d3.select(this).attr("r", 2.8);
+            tooltip.style("opacity", 0);
+          });
+      });
+
+      g.append("text")
+        .attr("class", "chart-title")
+        .attr("x", innerWidth / 2 - 50)
+        .attr("y", -35)
+        .attr("text-anchor", "middle")
+        .text("Small Multiples of Home Price Index by City");
+
+      svg.append("text")
+        .attr("class", "axis-label")
+        .attr("x", margin.left + innerWidth / 2 - 40)
+        .attr("y", height - 25)
+        .attr("text-anchor", "middle")
+        .text("Date");
+
+      svg.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -(margin.top + innerHeight / 2))
+        .attr("y", 25)
+        .attr("text-anchor", "middle")
+        .text("Home Price Index");
+
+      const legendGroup = svg.append("g")
+        .attr("transform", `translate(${width - 180}, ${margin.top + 140})`);
+
+      const legend = d3.legendColor()
+        .scale(color)
+        .shape("path", d3.symbol().type(d3.symbolSquare).size(140)())
+        .shapePadding(8)
+        .title("Cities");
+
+      legendGroup.call(legend);
+    });
+  </script>
+</body>
+</html>
