@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 7 — Multi-Series Area Chart</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/d3-legend/2.25.6/d3-legend.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; }
+    .axis-label { font-size: 16px; font-weight: 600; }
+    .tick text { font-size: 13px; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+    .area {
+      opacity: 0.45;
+    }
+    .overlay-line {
+      fill: none;
+      stroke-width: 2;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Multi-Series Area Chart</h1>
+  <p>Overlapping area chart of the Case-Shiller home price index for five U.S. cities.</p>
+
+  <svg id="chart" width="1300" height="700"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for areas, lines, scales, axes, time parsing, bisector, and CSV loading:
+     https://d3js.org/d3-shape/area
+     https://d3js.org/d3-shape/line
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-axis
+     https://d3js.org/d3-time-format
+     https://d3js.org/d3-array/bisect
+     https://d3js.org/d3-fetch
+
+  Color legend implementation using:
+     Susie Lu — d3-legend
+     https://d3-legend.susielu.com/
+
+  Tooltip interaction pattern adapted from general D3 mouse event usage:
+     https://d3js.org/d3-selection/events
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 70, right: 260, bottom: 90, left: 90 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const g = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    const tooltip = d3.select("#tooltip");
+    const parseDate = d3.timeParse("%Y-%m-%d");
+    const formatDate = d3.timeFormat("%B %Y");
+
+    const cities = [
+      "CA-San Francisco",
+      "CA-Los Angeles",
+      "AZ-Phoenix",
+      "CO-Denver",
+      "NY-New York"
+    ];
+
+    d3.csv("cities-month-SA.csv", d => ({
+      date: parseDate(d.Date),
+      "CA-San Francisco": +d["CA-San Francisco"],
+      "CA-Los Angeles": +d["CA-Los Angeles"],
+      "AZ-Phoenix": +d["AZ-Phoenix"],
+      "CO-Denver": +d["CO-Denver"],
+      "NY-New York": +d["NY-New York"]
+    })).then(data => {
+      const cleaned = data.filter(d =>
+        d.date &&
+        cities.every(city => Number.isFinite(d[city]))
+      );
+
+      const series = cities.map(city => ({
+        name: city,
+        values: cleaned.map(d => ({
+          date: d.date,
+          value: d[city]
+        }))
+      }));
+
+      const x = d3.scaleTime()
+        .domain(d3.extent(cleaned, d => d.date))
+        .range([0, innerWidth]);
+
+      const y = d3.scaleLinear()
+        .domain([
+          0,
+          d3.max(series, s => d3.max(s.values, d => d.value))
+        ])
+        .nice()
+        .range([innerHeight, 0]);
+
+      const color = d3.scaleOrdinal()
+        .domain(cities)
+        .range(d3.schemeTableau10.slice(0, cities.length));
+
+      const xAxis = d3.axisBottom(x).ticks(10);
+      const yAxis = d3.axisLeft(y);
+
+      g.append("g")
+        .call(yAxis);
+
+      g.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(xAxis);
+
+      const area = d3.area()
+        .x(d => x(d.date))
+        .y0(innerHeight)
+        .y1(d => y(d.value));
+
+      const line = d3.line()
+        .x(d => x(d.date))
+        .y(d => y(d.value));
+
+      g.selectAll("path.area-shape")
+        .data(series)
+        .enter()
+        .append("path")
+        .attr("class", "area area-shape")
+        .attr("fill", d => color(d.name))
+        .attr("d", d => area(d.values));
+
+      g.selectAll("path.area-line")
+        .data(series)
+        .enter()
+        .append("path")
+        .attr("class", "overlay-line area-line")
+        .attr("stroke", d => color(d.name))
+        .attr("d", d => line(d.values));
+
+      const focusGroup = g.append("g");
+      const focusItems = {};
+
+      cities.forEach(city => {
+        const cityFocus = focusGroup.append("g")
+          .style("display", "none");
+
+        cityFocus.append("circle")
+          .attr("r", 5)
+          .attr("fill", color(city));
+
+        focusItems[city] = cityFocus;
+      });
+
+      const bisectDate = d3.bisector(d => d.date).left;
+
+      g.append("rect")
+        .attr("width", innerWidth)
+        .attr("height", innerHeight)
+        .attr("fill", "none")
+        .attr("pointer-events", "all")
+        .on("mouseover", function() {
+          cities.forEach(city => {
+            focusItems[city].style("display", null);
+          });
+          tooltip.style("opacity", 1);
+        })
+        .on("mousemove", function(event) {
+          const [mx] = d3.pointer(event, this);
+          const xDate = x.invert(mx);
+
+          let tooltipHTML = "";
+          let closestDate = null;
+
+          cities.forEach(city => {
+            const values = series.find(s => s.name === city).values;
+            let i = bisectDate(values, xDate, 1);
+
+            if (i >= values.length) i = values.length - 1;
+            if (i < 1) i = 1;
+
+            const d0 = values[i - 1];
+            const d1 = values[i];
+            const d = xDate - d0.date > d1.date - xDate ? d1 : d0;
+
+            if (!closestDate) {
+              closestDate = d.date;
+            }
+
+            focusItems[city]
+              .attr("transform", `translate(${x(d.date)},${y(d.value)})`);
+
+            tooltipHTML +=
+              `<span style="color:${color(city)};"><strong>${city}</strong></span>: ${d.value.toFixed(2)}<br>`;
+          });
+
+          tooltip
+            .html(`<strong>${formatDate(closestDate)}</strong><br>${tooltipHTML}`)
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          cities.forEach(city => {
+            focusItems[city].style("display", "none");
+          });
+          tooltip.style("opacity", 0);
+        });
+
+      g.append("text")
+        .attr("class", "chart-title")
+        .attr("x", innerWidth / 2)
+        .attr("y", -25)
+        .attr("text-anchor", "middle")
+        .text("Overlapping Home Price Index Areas");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 60)
+        .attr("text-anchor", "middle")
+        .text("Date");
+
+      g.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -55)
+        .attr("text-anchor", "middle")
+        .text("Home Price Index");
+
+      const legendGroup = svg.append("g")
+        .attr("transform", `translate(${margin.left + innerWidth + 40}, ${margin.top + 120})`);
+
+      const legend = d3.legendColor()
+        .scale(color)
+        .shape("path", d3.symbol().type(d3.symbolSquare).size(140)())
+        .shapePadding(8)
+        .title("Cities");
+
+      legendGroup.call(legend);
+    });
+  </script>
+</body>
+</html>
