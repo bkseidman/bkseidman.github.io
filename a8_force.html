@@ -43,7 +43,7 @@
   <h1>Force-Directed Node-Link Diagram</h1>
   <p>Dolphins social network displayed as a force-directed graph.</p>
 
-  <svg id="chart" width="1200" height="800"></svg>
+  <svg id="chart" width="1300" height="900"></svg>
   <div id="tooltip" class="tooltip"></div>
 
   <script>
@@ -64,6 +64,7 @@
     const width = +svg.attr("width");
     const height = +svg.attr("height");
     const tooltip = d3.select("#tooltip");
+    const boundsPadding = 40;
 
     Promise.all([
       d3.csv("dolphins_nodes.csv", d => ({
@@ -148,16 +149,16 @@
         .text(d => d.id);
 
       const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(70))
-        .force("charge", d3.forceManyBody().strength(-180))
+        .force("link", d3.forceLink(links).id(d => d.id).distance(55))
+        .force("charge", d3.forceManyBody().strength(-120))
         .force("center", d3.forceCenter(width / 2, height / 2))
         .force("collision", d3.forceCollide().radius(d => radius(d.degree) + 4));
 
       simulation.on("tick", () => {
         nodes.forEach(d => {
           const r = radius(d.degree);
-          d.x = Math.max(r, Math.min(width - r, d.x));
-          d.y = Math.max(r, Math.min(height - r, d.y));
+          d.x = Math.max(boundsPadding + r, Math.min(width - boundsPadding - r, d.x));
+          d.y = Math.max(boundsPadding + r, Math.min(height - boundsPadding - r, d.y));
         });
 
         link
@@ -190,8 +191,8 @@
 
       function dragged(event, d) {
         const r = radius(d.degree);
-        d.fx = Math.max(r, Math.min(width - r, event.x));
-        d.fy = Math.max(r, Math.min(height - r, event.y));
+        d.fx = Math.max(boundsPadding + r, Math.min(width - boundsPadding - r, event.x));
+        d.fy = Math.max(boundsPadding + r, Math.min(height - boundsPadding - r, event.y));
       }
 
       function dragEnded(event, d) {
