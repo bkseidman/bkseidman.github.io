@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 8 — Edge Bundling</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    .controls { margin: 14px 0 18px 0; }
+    .controls label { margin-right: 10px; font-weight: 600; }
+    svg { background: white; border: 1px solid #ddd; }
+    .link {
+      fill: none;
+      stroke: #888;
+      stroke-opacity: 0.28;
+    }
+    .node {
+      fill: steelblue;
+      stroke: white;
+      stroke-width: 1.2px;
+    }
+    .node-label {
+      font-size: 10px;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Bundled Node-Link Diagram</h1>
+  <p>Dolphins social network shown with curved bundled edges and an adjustable bundling slider.</p>
+
+  <div class="controls">
+    <label for="bundleSlider">Bundling Amount:</label>
+    <input type="range" id="bundleSlider" min="0" max="1" step="0.05" value="0.85">
+    <span id="bundleValue">0.85</span>
+  </div>
+
+  <svg id="chart" width="1100" height="900"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for CSV loading, lines/curves, scales, arrays, and selections:
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-shape/line
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-array
+     https://d3js.org/d3-selection/events
+
+  Circular node-link and curved edge approaches adapted from standard D3 path generation ideas:
+     https://d3js.org/d3-shape/curve
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("#tooltip");
+
+    const slider = d3.select("#bundleSlider");
+    const bundleValue = d3.select("#bundleValue");
+
+    const cx = width / 2;
+    const cy = height / 2;
+    const radius = 320;
+
+    const container = svg.append("g");
+
+    Promise.all([
+      d3.csv("dolphins_nodes.csv", d => ({ id: d.id })),
+      d3.csv("dolphins_edges.csv", d => ({ source: d.source, target: d.target }))
+    ]).then(([nodes, links]) => {
+
+      const degreeMap = {};
+      nodes.forEach(n => degreeMap[n.id] = 0);
+      links.forEach(l => {
+        degreeMap[l.source] += 1;
+        degreeMap[l.target] += 1;
+      });
+      nodes.forEach(n => n.degree = degreeMap[n.id]);
+
+      // sort nodes by id for stable circular placement
+      nodes.sort((a, b) => +a.id - +b.id);
+
+      nodes.forEach((node, i) => {
+        const angle = (2 * Math.PI * i / nodes.length) - Math.PI / 2;
+        node.angle = angle;
+        node.x = cx + radius * Math.cos(angle);
+        node.y = cy + radius * Math.sin(angle);
+      });
+
+      const nodeById = new Map(nodes.map(d => [d.id, d]));
+
+      const nodeRadius = d3.scaleSqrt()
+        .domain(d3.extent(nodes, d => d.degree))
+        .range([4, 11]);
+
+      const linkGroup = container.append("g");
+      const nodeGroup = container.append("g");
+
+      function bundledPath(link, tension) {
+        const source = nodeById.get(link.source);
+        const target = nodeById.get(link.target);
+
+        const mx = (source.x + target.x) / 2;
+        const my = (source.y + target.y) / 2;
+
+        // when tension is high, pull the curve more toward the center
+        const controlX = mx * (1 - tension) + cx * tension;
+        const controlY = my * (1 - tension) + cy * tension;
+
+        return `M ${source.x},${source.y} Q ${controlX},${controlY} ${target.x},${target.y}`;
+      }
+
+      function render(tension) {
+        bundleValue.text(tension.toFixed(2));
+
+        const linkSel = linkGroup.selectAll("path")
+          .data(links);
+
+        linkSel.enter()
+          .append("path")
+          .attr("class", "link")
+          .merge(linkSel)
+          .attr("d", d => bundledPath(d, tension))
+          .attr("stroke-width", 1.5);
+
+        linkSel.exit().remove();
+      }
+
+      nodeGroup.selectAll("circle")
+        .data(nodes)
+        .enter()
+        .append("circle")
+        .attr("class", "node")
+        .attr("cx", d => d.x)
+        .attr("cy", d => d.y)
+        .attr("r", d => nodeRadius(d.degree))
+        .on("mouseover", function(event, d) {
+          d3.select(this)
+            .attr("fill", "#d62728");
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>Node:</strong> ${d.id}<br>` +
+              `<strong>Degree:</strong> ${d.degree}`
+            );
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this)
+            .attr("fill", "steelblue");
+
+          tooltip.style("opacity", 0);
+        });
+
+      nodeGroup.selectAll("text")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("class", "node-label")
+        .attr("x", d => d.x)
+        .attr("y", d => d.y)
+        .attr("dx", d => 14 * Math.cos(d.angle))
+        .attr("dy", d => 14 * Math.sin(d.angle))
+        .attr("text-anchor", d => {
+          const deg = d.angle * 180 / Math.PI;
+          return (deg > 90 || deg < -90) ? "end" : "start";
+        })
+        .attr("alignment-baseline", "middle")
+        .text(d => d.id);
+
+      render(+slider.property("value"));
+
+      slider.on("input", function() {
+        const tension = +this.value;
+        render(tension);
+      });
+    });
+  </script>
+</body>
+</html>
