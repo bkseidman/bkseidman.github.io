@@ -2,20 +2,38 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Force Graph (Email)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 8 — Force Graph (Email)</title>
+
   <script src="https://d3js.org/d3.v7.min.js"></script>
 
   <style>
     body { font-family: Arial, sans-serif; margin: 30px; }
-    svg { border: 1px solid #ddd; }
-    .link { stroke: #999; stroke-opacity: 0.6; }
-    .node { stroke: #fff; stroke-width: 1.5px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; border: 1px solid #ddd; }
+    .link {
+      stroke: #999;
+      stroke-opacity: 0.6;
+    }
+    .node {
+      stroke: #fff;
+      stroke-width: 1.5px;
+      cursor: pointer;
+    }
+    .label {
+      font-size: 10px;
+      pointer-events: none;
+    }
     .tooltip {
       position: absolute;
+      pointer-events: none;
       background: white;
       border: 1px solid #999;
-      padding: 6px 8px;
-      font-size: 12px;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
       opacity: 0;
     }
   </style>
@@ -25,58 +43,129 @@
   <h1>Force-Directed Node-Link Diagram</h1>
   <p>Email communication network displayed as a force-directed graph.</p>
 
-  <svg width="1200" height="800"></svg>
+  <svg id="chart" width="1300" height="900"></svg>
   <div id="tooltip" class="tooltip"></div>
 
   <script>
-    const svg = d3.select("svg");
-    const width = 1200;
-    const height = 800;
+  /*
+  CITATIONS:
+
+  D3 official documentation for force simulation, dragging, CSV loading, and selections:
+     https://d3js.org/d3-force
+     https://d3js.org/d3-drag
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-selection/events
+
+  Force-directed graph structure adapted from standard D3 force layout patterns:
+     https://observablehq.com/@d3/force-directed-graph
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
     const tooltip = d3.select("#tooltip");
+    const boundsPadding = 40;
 
     Promise.all([
-      d3.csv("email_nodes.csv"),
-      d3.csv("email_edges.csv")
+      d3.csv("email_nodes.csv", d => ({
+        id: String(d.id).trim()
+      })),
+      d3.csv("email_edges.csv", d => ({
+        source: String(d.source).trim(),
+        target: String(d.target).trim()
+      }))
     ]).then(([nodes, links]) => {
+      const nodeIds = new Set(nodes.map(d => d.id));
 
-      const simulation = d3.forceSimulation(nodes)
-        .force("link", d3.forceLink(links).id(d => d.id).distance(60))
-        .force("charge", d3.forceManyBody().strength(-120))
-        .force("center", d3.forceCenter(width/2, height/2));
+      const filteredLinks = links.filter(d =>
+        nodeIds.has(d.source) && nodeIds.has(d.target)
+      );
+
+      const degreeMap = {};
+      nodes.forEach(node => {
+        degreeMap[node.id] = 0;
+      });
+
+      filteredLinks.forEach(link => {
+        degreeMap[link.source] += 1;
+        degreeMap[link.target] += 1;
+      });
+
+      nodes.forEach(node => {
+        node.degree = degreeMap[node.id];
+      });
+
+      const color = d3.scaleSequential(d3.interpolateBlues)
+        .domain(d3.extent(nodes, d => d.degree));
+
+      const radius = d3.scaleSqrt()
+        .domain(d3.extent(nodes, d => d.degree))
+        .range([5, 14]);
 
       const link = svg.append("g")
         .selectAll("line")
-        .data(links)
+        .data(filteredLinks)
         .enter()
         .append("line")
-        .attr("class", "link");
+        .attr("class", "link")
+        .attr("stroke-width", 1.3);
 
       const node = svg.append("g")
         .selectAll("circle")
         .data(nodes)
         .enter()
         .append("circle")
-        .attr("r", 6)
-        .attr("fill", "steelblue")
         .attr("class", "node")
-        .on("mouseover", function(event, d){
-          tooltip.style("opacity", 1)
-            .html(`Node: ${d.id}`);
+        .attr("r", d => radius(d.degree))
+        .attr("fill", d => color(d.degree))
+        .on("mouseover", function(event, d) {
+          d3.select(this)
+            .attr("stroke", "#222")
+            .attr("stroke-width", 3);
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>Node:</strong> ${d.id}<br>` +
+              `<strong>Degree:</strong> ${d.degree}`
+            );
         })
-        .on("mousemove", function(event){
-          tooltip.style("left", (event.pageX+10)+"px")
-                 .style("top", (event.pageY-20)+"px");
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
         })
-        .on("mouseout", function(){
+        .on("mouseout", function() {
+          d3.select(this)
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 1.5);
+
           tooltip.style("opacity", 0);
-        })
-        .call(d3.drag()
-          .on("start", dragstart)
-          .on("drag", dragging)
-          .on("end", dragend)
-        );
+        });
+
+      const labels = svg.append("g")
+        .selectAll("text")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("class", "label")
+        .attr("text-anchor", "middle")
+        .attr("dy", 3)
+        .text(d => d.id);
+
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(filteredLinks).id(d => d.id).distance(55))
+        .force("charge", d3.forceManyBody().strength(-120))
+        .force("center", d3.forceCenter(width / 2, height / 2))
+        .force("collision", d3.forceCollide().radius(d => radius(d.degree) + 4));
 
       simulation.on("tick", () => {
+        nodes.forEach(d => {
+          const r = radius(d.degree);
+          d.x = Math.max(boundsPadding + r, Math.min(width - boundsPadding - r, d.x));
+          d.y = Math.max(boundsPadding + r, Math.min(height - boundsPadding - r, d.y));
+        });
+
         link
           .attr("x1", d => d.source.x)
           .attr("y1", d => d.source.y)
@@ -86,25 +175,38 @@
         node
           .attr("cx", d => d.x)
           .attr("cy", d => d.y);
+
+        labels
+          .attr("x", d => d.x)
+          .attr("y", d => d.y);
       });
 
-      function dragstart(event, d){
+      node.call(
+        d3.drag()
+          .on("start", dragStarted)
+          .on("drag", dragged)
+          .on("end", dragEnded)
+      );
+
+      function dragStarted(event, d) {
         if (!event.active) simulation.alphaTarget(0.3).restart();
         d.fx = d.x;
         d.fy = d.y;
       }
 
-      function dragging(event, d){
-        d.fx = event.x;
-        d.fy = event.y;
+      function dragged(event, d) {
+        const r = radius(d.degree);
+        d.fx = Math.max(boundsPadding + r, Math.min(width - boundsPadding - r, event.x));
+        d.fy = Math.max(boundsPadding + r, Math.min(height - boundsPadding - r, event.y));
       }
 
-      function dragend(event, d){
+      function dragEnded(event, d) {
         if (!event.active) simulation.alphaTarget(0);
         d.fx = null;
         d.fy = null;
       }
-
+    }).catch(error => {
+      console.error("Error loading email graph data:", error);
     });
   </script>
 </body>
