@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 8 — Force-Directed Graph</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; border: 1px solid #ddd; }
+    .chart-title { font-size: 24px; font-weight: 700; }
+    .link {
+      stroke: #999;
+      stroke-opacity: 0.6;
+    }
+    .node {
+      stroke: #fff;
+      stroke-width: 1.5px;
+      cursor: pointer;
+    }
+    .label {
+      font-size: 12px;
+      pointer-events: none;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Force-Directed Node-Link Diagram</h1>
+  <p>Dolphins social network displayed as a force-directed graph.</p>
+
+  <svg id="chart" width="1200" height="800"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for force simulation, dragging, CSV loading, and selections:
+     https://d3js.org/d3-force
+     https://d3js.org/d3-drag
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-selection/events
+
+  Force-directed graph structure adapted from standard D3 force layout patterns:
+     https://observablehq.com/@d3/force-directed-graph
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("#tooltip");
+
+    Promise.all([
+      d3.csv("dolphins_nodes.csv", d => ({
+        id: d.id
+      })),
+      d3.csv("dolphins_edges.csv", d => ({
+        source: d.source,
+        target: d.target
+      }))
+    ]).then(([nodes, links]) => {
+      const degreeMap = {};
+
+      nodes.forEach(node => {
+        degreeMap[node.id] = 0;
+      });
+
+      links.forEach(link => {
+        degreeMap[link.source] += 1;
+        degreeMap[link.target] += 1;
+      });
+
+      nodes.forEach(node => {
+        node.degree = degreeMap[node.id];
+      });
+
+      const color = d3.scaleSequential(d3.interpolateBlues)
+        .domain(d3.extent(nodes, d => d.degree));
+
+      const radius = d3.scaleSqrt()
+        .domain(d3.extent(nodes, d => d.degree))
+        .range([6, 18]);
+
+      svg.append("text")
+        .attr("class", "chart-title")
+        .attr("x", width / 2)
+        .attr("y", 35)
+        .attr("text-anchor", "middle")
+        .text("Dolphins Social Network");
+
+      const container = svg.append("g")
+        .attr("transform", "translate(0,40)");
+
+      const link = container.append("g")
+        .selectAll("line")
+        .data(links)
+        .enter()
+        .append("line")
+        .attr("class", "link")
+        .attr("stroke-width", 1.5);
+
+      const node = container.append("g")
+        .selectAll("circle")
+        .data(nodes)
+        .enter()
+        .append("circle")
+        .attr("class", "node")
+        .attr("r", d => radius(d.degree))
+        .attr("fill", d => color(d.degree))
+        .on("mouseover", function(event, d) {
+          d3.select(this)
+            .attr("stroke", "#222")
+            .attr("stroke-width", 3);
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>Node:</strong> ${d.id}<br>` +
+              `<strong>Degree:</strong> ${d.degree}`
+            );
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this)
+            .attr("stroke", "#fff")
+            .attr("stroke-width", 1.5);
+
+          tooltip.style("opacity", 0);
+        });
+
+      const labels = container.append("g")
+        .selectAll("text")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("class", "label")
+        .attr("text-anchor", "middle")
+        .attr("dy", 4)
+        .text(d => d.id);
+
+      const simulation = d3.forceSimulation(nodes)
+        .force("link", d3.forceLink(links).id(d => d.id).distance(70))
+        .force("charge", d3.forceManyBody().strength(-180))
+        .force("center", d3.forceCenter(width / 2, (height - 40) / 2))
+        .force("collision", d3.forceCollide().radius(d => radius(d.degree) + 4));
+
+      simulation.on("tick", () => {
+        link
+          .attr("x1", d => d.source.x)
+          .attr("y1", d => d.source.y)
+          .attr("x2", d => d.target.x)
+          .attr("y2", d => d.target.y);
+
+        node
+          .attr("cx", d => d.x)
+          .attr("cy", d => d.y);
+
+        labels
+          .attr("x", d => d.x)
+          .attr("y", d => d.y);
+      });
+
+      node.call(
+        d3.drag()
+          .on("start", dragStarted)
+          .on("drag", dragged)
+          .on("end", dragEnded)
+      );
+
+      function dragStarted(event, d) {
+        if (!event.active) simulation.alphaTarget(0.3).restart();
+        d.fx = d.x;
+        d.fy = d.y;
+      }
+
+      function dragged(event, d) {
+        d.fx = event.x;
+        d.fy = event.y;
+      }
+
+      function dragEnded(event, d) {
+        if (!event.active) simulation.alphaTarget(0);
+        d.fx = null;
+        d.fy = null;
+      }
+    });
+  </script>
+</body>
+</html>
