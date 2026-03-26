@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 8 — Adjacency Matrix</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; border: 1px solid #ddd; }
+
+    .cell {
+      stroke: #eee;
+      stroke-width: 0.5px;
+    }
+
+    .row-label,
+    .col-label {
+      font-size: 10px;
+      fill: #333;
+    }
+
+    .highlight-label {
+      fill: #d62728;
+      font-weight: 700;
+    }
+
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+
+    .chart-title {
+      font-size: 22px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Adjacency Matrix</h1>
+  <p>Dolphins social network shown as an adjacency matrix with row and column highlighting.</p>
+
+  <svg id="chart" width="980" height="980"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for CSV loading, scales, selections, and arrays:
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-scale/band
+     https://d3js.org/d3-selection/events
+     https://d3js.org/d3-array
+
+  Adjacency matrix approach adapted from standard D3 matrix visualization patterns.
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("#tooltip");
+
+    const margin = { top: 140, right: 40, bottom: 40, left: 140 };
+    const matrixSize = 760;
+
+    Promise.all([
+      d3.csv("dolphins_nodes.csv", d => ({ id: d.id })),
+      d3.csv("dolphins_edges.csv", d => ({
+        source: d.source,
+        target: d.target
+      }))
+    ]).then(([nodes, links]) => {
+      nodes.sort((a, b) => +a.id - +b.id);
+
+      const n = nodes.length;
+
+      const nodeIndex = new Map();
+      nodes.forEach((node, i) => {
+        nodeIndex.set(node.id, i);
+      });
+
+      const matrix = [];
+      for (let i = 0; i < n; i++) {
+        for (let j = 0; j < n; j++) {
+          matrix.push({
+            row: i,
+            col: j,
+            value: 0
+          });
+        }
+      }
+
+      links.forEach(link => {
+        const i = nodeIndex.get(link.source);
+        const j = nodeIndex.get(link.target);
+
+        matrix[i * n + j].value = 1;
+        matrix[j * n + i].value = 1;
+      });
+
+      for (let i = 0; i < n; i++) {
+        matrix[i * n + i].value = 1;
+      }
+
+      const x = d3.scaleBand()
+        .domain(d3.range(n))
+        .range([margin.left, margin.left + matrixSize]);
+
+      const color = d3.scaleOrdinal()
+        .domain([0, 1])
+        .range(["#f7fbff", "#3182bd"]);
+
+      svg.append("text")
+        .attr("class", "chart-title")
+        .attr("x", width / 2)
+        .attr("y", 40)
+        .attr("text-anchor", "middle")
+        .text("Dolphins Adjacency Matrix");
+
+      const cellGroup = svg.append("g");
+
+      cellGroup.selectAll("rect")
+        .data(matrix)
+        .enter()
+        .append("rect")
+        .attr("class", "cell")
+        .attr("x", d => x(d.col))
+        .attr("y", d => x(d.row))
+        .attr("width", x.bandwidth())
+        .attr("height", x.bandwidth())
+        .attr("fill", d => color(d.value))
+        .on("mouseover", function(event, d) {
+          const rowNode = nodes[d.row].id;
+          const colNode = nodes[d.col].id;
+
+          svg.selectAll(".cell")
+            .attr("opacity", cell =>
+              (cell.row === d.row || cell.col === d.col) ? 1 : 0.15
+            );
+
+          svg.selectAll(".row-label")
+            .classed("highlight-label", (node, i) => i === d.row);
+
+          svg.selectAll(".col-label")
+            .classed("highlight-label", (node, i) => i === d.col);
+
+          d3.select(this)
+            .attr("stroke", "#222")
+            .attr("stroke-width", 1.2);
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>Row node:</strong> ${rowNode}<br>` +
+              `<strong>Column node:</strong> ${colNode}<br>` +
+              `<strong>Connection:</strong> ${d.value === 1 ? "Yes" : "No"}`
+            );
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          svg.selectAll(".cell")
+            .attr("opacity", 1)
+            .attr("stroke", "#eee")
+            .attr("stroke-width", 0.5);
+
+          svg.selectAll(".row-label")
+            .classed("highlight-label", false);
+
+          svg.selectAll(".col-label")
+            .classed("highlight-label", false);
+
+          tooltip.style("opacity", 0);
+        });
+
+      svg.selectAll(".row-label")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("class", "row-label")
+        .attr("x", margin.left - 8)
+        .attr("y", (d, i) => x(i) + x.bandwidth() / 2)
+        .attr("text-anchor", "end")
+        .attr("alignment-baseline", "middle")
+        .text(d => d.id);
+
+      svg.selectAll(".col-label")
+        .data(nodes)
+        .enter()
+        .append("text")
+        .attr("class", "col-label")
+        .attr("x", (d, i) => x(i) + x.bandwidth() / 2)
+        .attr("y", margin.top - 8)
+        .attr("text-anchor", "start")
+        .attr("transform", (d, i) =>
+          `rotate(-90, ${x(i) + x.bandwidth() / 2}, ${margin.top - 8})`
+        )
+        .text(d => d.id);
+    });
+  </script>
+</body>
+</html>
