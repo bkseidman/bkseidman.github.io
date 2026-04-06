@@ -1,0 +1,282 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 9 — Choropleth Map</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; border: 1px solid #ddd; }
+    .state {
+      stroke: #fff;
+      stroke-width: 1;
+    }
+    .state-boundary {
+      fill: none;
+      stroke: #fff;
+      stroke-width: 1;
+      pointer-events: none;
+    }
+    .legend-label {
+      font-size: 12px;
+    }
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+    .top10-label {
+      font-size: 11px;
+      fill: #111;
+      font-weight: 600;
+      pointer-events: none;
+    }
+    .chart-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Choropleth Map</h1>
+  <p>U.S. poverty rate by state in 2023, shown with a choropleth map and top 10 state labels.</p>
+
+  <svg id="chart" width="1200" height="800"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for geographic projections, paths, CSV loading, scales, and selections:
+     https://d3js.org/d3-geo
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-selection/events
+
+  TopoJSON client for converting TopoJSON to GeoJSON:
+     https://github.com/topojson/topojson-client
+
+  U.S. states TopoJSON source:
+     https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("#tooltip");
+
+    const stateIdToAbbr = {
+      "01": "AL", "02": "AK", "04": "AZ", "05": "AR", "06": "CA",
+      "08": "CO", "09": "CT", "10": "DE", "11": "DC", "12": "FL",
+      "13": "GA", "15": "HI", "16": "ID", "17": "IL", "18": "IN",
+      "19": "IA", "20": "KS", "21": "KY", "22": "LA", "23": "ME",
+      "24": "MD", "25": "MA", "26": "MI", "27": "MN", "28": "MS",
+      "29": "MO", "30": "MT", "31": "NE", "32": "NV", "33": "NH",
+      "34": "NJ", "35": "NM", "36": "NY", "37": "NC", "38": "ND",
+      "39": "OH", "40": "OK", "41": "OR", "42": "PA", "44": "RI",
+      "45": "SC", "46": "SD", "47": "TN", "48": "TX", "49": "UT",
+      "50": "VT", "51": "VA", "53": "WA", "54": "WV", "55": "WI",
+      "56": "WY"
+    };
+
+    Promise.all([
+      d3.csv("poverty_clean.csv", d => ({
+        state: d.state,
+        name: d.name,
+        value: +d.value
+      })),
+      d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json")
+    ]).then(([povertyData, us]) => {
+      const dataMap = new Map();
+      povertyData.forEach(d => {
+        dataMap.set(d.state, d);
+      });
+
+      const top10 = povertyData
+        .slice()
+        .sort((a, b) => d3.descending(a.value, b.value))
+        .slice(0, 10);
+
+      const top10Set = new Set(top10.map(d => d.state));
+
+      const states = topojson.feature(us, us.objects.states);
+      const stateFeatures = states.features;
+
+      const projection = d3.geoAlbersUsa()
+        .fitSize([980, 620], states);
+
+      const path = d3.geoPath().projection(projection);
+
+      const values = povertyData.map(d => d.value);
+
+      const color = d3.scaleSequential()
+        .domain([d3.min(values), d3.max(values)])
+        .interpolator(d3.interpolateBlues);
+
+      svg.append("text")
+        .attr("class", "chart-title")
+        .attr("x", width / 2)
+        .attr("y", 40)
+        .attr("text-anchor", "middle")
+        .text("Poverty Rate by State (2023)");
+
+      const mapGroup = svg.append("g")
+        .attr("transform", "translate(40,90)");
+
+      mapGroup.selectAll("path.state")
+        .data(stateFeatures)
+        .enter()
+        .append("path")
+        .attr("class", "state")
+        .attr("d", path)
+        .attr("fill", d => {
+          const stateId = String(d.id).padStart(2, "0");
+          const abbr = stateIdToAbbr[stateId];
+          const row = dataMap.get(abbr);
+          return row ? color(row.value) : "#eee";
+        })
+        .attr("stroke", d => {
+          const stateId = String(d.id).padStart(2, "0");
+          const abbr = stateIdToAbbr[stateId];
+          return top10Set.has(abbr) ? "#c62828" : "#fff";
+        })
+        .attr("stroke-width", d => {
+          const stateId = String(d.id).padStart(2, "0");
+          const abbr = stateIdToAbbr[stateId];
+          return top10Set.has(abbr) ? 2.5 : 1;
+        })
+        .on("mouseover", function(event, d) {
+          const stateId = String(d.id).padStart(2, "0");
+          const abbr = stateIdToAbbr[stateId];
+          const row = dataMap.get(abbr);
+
+          d3.select(this)
+            .attr("opacity", 0.8);
+
+          if (row) {
+            tooltip
+              .style("opacity", 1)
+              .html(
+                `<strong>${row.name}</strong><br>` +
+                `State: ${row.state}<br>` +
+                `Poverty rate: ${row.value.toFixed(1)}%`
+              );
+          }
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this)
+            .attr("opacity", 1);
+
+          tooltip.style("opacity", 0);
+        });
+
+      mapGroup.selectAll("text.top10-label")
+        .data(stateFeatures.filter(d => {
+          const stateId = String(d.id).padStart(2, "0");
+          const abbr = stateIdToAbbr[stateId];
+          return top10Set.has(abbr);
+        }))
+        .enter()
+        .append("text")
+        .attr("class", "top10-label")
+        .attr("x", d => {
+          const centroid = path.centroid(d);
+          return centroid[0];
+        })
+        .attr("y", d => {
+          const centroid = path.centroid(d);
+          return centroid[1];
+        })
+        .attr("text-anchor", "middle")
+        .attr("dy", 4)
+        .text(d => {
+          const stateId = String(d.id).padStart(2, "0");
+          return stateIdToAbbr[stateId];
+        });
+
+      const legendWidth = 300;
+      const legendHeight = 14;
+      const legendX = 780;
+      const legendY = 730;
+
+      const legendScale = d3.scaleLinear()
+        .domain(color.domain())
+        .range([0, legendWidth]);
+
+      const legendAxis = d3.axisBottom(legendScale)
+        .ticks(6)
+        .tickFormat(d => d + "%");
+
+      const defs = svg.append("defs");
+
+      const linearGradient = defs.append("linearGradient")
+        .attr("id", "legend-gradient");
+
+      linearGradient.selectAll("stop")
+        .data(d3.range(0, 1.01, 0.1))
+        .enter()
+        .append("stop")
+        .attr("offset", d => (d * 100) + "%")
+        .attr("stop-color", d => color(
+          color.domain()[0] + d * (color.domain()[1] - color.domain()[0])
+        ));
+
+      svg.append("text")
+        .attr("class", "legend-label")
+        .attr("x", legendX)
+        .attr("y", legendY - 12)
+        .text("Poverty Rate (%)");
+
+      svg.append("rect")
+        .attr("x", legendX)
+        .attr("y", legendY)
+        .attr("width", legendWidth)
+        .attr("height", legendHeight)
+        .attr("fill", "url(#legend-gradient)")
+        .attr("stroke", "#999");
+
+      svg.append("g")
+        .attr("transform", `translate(${legendX},${legendY + legendHeight})`)
+        .call(legendAxis);
+
+      const top10ListX = 1030;
+      const top10ListY = 120;
+
+      svg.append("text")
+        .attr("x", top10ListX)
+        .attr("y", top10ListY)
+        .attr("font-size", 14)
+        .attr("font-weight", 700)
+        .text("Top 10 States");
+
+      svg.selectAll("text.top10-list")
+        .data(top10)
+        .enter()
+        .append("text")
+        .attr("x", top10ListX)
+        .attr("y", (d, i) => top10ListY + 24 + i * 18)
+        .attr("font-size", 12)
+        .text(d => `${d.state} (${d.value.toFixed(1)}%)`);
+    });
+  </script>
+</body>
+</html>
