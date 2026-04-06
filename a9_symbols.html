@@ -22,7 +22,7 @@
 
     .symbol {
       fill: steelblue;
-      fill-opacity: 0.65;
+      fill-opacity: 0.45;
       stroke: #1f3c88;
       stroke-width: 1.2;
     }
@@ -117,9 +117,17 @@
       svg.append("text")
         .attr("class", "chart-title")
         .attr("x", width / 2)
-        .attr("y", 40)
+        .attr("y", 50)
         .attr("text-anchor", "middle")
         .text("State Cost of Living Index");
+
+      svg.append("text")
+        .attr("x", width / 2)
+        .attr("y", 75)
+        .attr("text-anchor", "middle")
+        .attr("font-size", 14)
+        .attr("fill", "#555")
+        .text("Higher values indicate more expensive states");
 
       const mapGroup = svg.append("g")
         .attr("transform", "translate(40,90)");
@@ -131,7 +139,7 @@
         .attr("class", "state")
         .attr("d", path);
 
-      const symbols = mapGroup.selectAll("circle")
+      mapGroup.selectAll("circle")
         .data(data.filter(d => projection([d.lng, d.lat]) !== null))
         .enter()
         .append("circle")
@@ -163,15 +171,9 @@
           tooltip.style("opacity", 0);
         });
 
-      const legendX = 820;
-      const legendY = 650;
-
-      const legendValues = [
-        d3.min(data, d => d.costIndex),
-        110,
-        140,
-        d3.max(data, d => d.costIndex)
-      ];
+      const legendX = 900;
+      const legendY = 700;
+      const legendValues = [90, 110, 140, 190];
 
       svg.append("text")
         .attr("class", "legend-label")
