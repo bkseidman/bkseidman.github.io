@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Assignment 9 — Proportional Symbol Map</title>
+
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+  <style>
+    body { font-family: Arial, sans-serif; margin: 30px; }
+    h1 { margin-bottom: 8px; }
+    p { margin-top: 0; color: #444; }
+    svg { background: white; border: 1px solid #ddd; }
+
+    .state {
+      fill: #f3f3f3;
+      stroke: #ffffff;
+      stroke-width: 1;
+    }
+
+    .symbol {
+      fill: steelblue;
+      fill-opacity: 0.65;
+      stroke: #1f3c88;
+      stroke-width: 1.2;
+    }
+
+    .highlight-symbol {
+      fill: #d62728;
+      fill-opacity: 0.75;
+      stroke: #7f0000;
+      stroke-width: 1.5;
+    }
+
+    .tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: white;
+      border: 1px solid #999;
+      border-radius: 4px;
+      padding: 8px 10px;
+      font-size: 13px;
+      color: #222;
+      opacity: 0;
+    }
+
+    .legend-label {
+      font-size: 12px;
+    }
+
+    .chart-title {
+      font-size: 24px;
+      font-weight: 700;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Proportional Symbol Map</h1>
+  <p>Cost of living index by state shown with proportional symbols positioned at state centroids.</p>
+
+  <svg id="chart" width="1200" height="800"></svg>
+  <div id="tooltip" class="tooltip"></div>
+
+  <script>
+  /*
+  CITATIONS:
+
+  D3 official documentation for geographic projections, paths, CSV loading, scales, and selections:
+     https://d3js.org/d3-geo
+     https://d3js.org/d3-fetch
+     https://d3js.org/d3-scale
+     https://d3js.org/d3-selection/events
+
+  TopoJSON client for converting TopoJSON to GeoJSON:
+     https://github.com/topojson/topojson-client
+
+  U.S. states TopoJSON source:
+     https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json
+  */
+
+    const svg = d3.select("#chart");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+    const tooltip = d3.select("#tooltip");
+
+    Promise.all([
+      d3.csv("expensive_states_clean.csv", d => ({
+        state: d.state,
+        postal: d.postal,
+        lat: +d.lat,
+        lng: +d.lng,
+        costIndex: +d.costIndex
+      })),
+      d3.json("https://cdn.jsdelivr.net/npm/us-atlas@3/states-10m.json")
+    ]).then(([data, us]) => {
+      const states = topojson.feature(us, us.objects.states);
+
+      const projection = d3.geoAlbersUsa()
+        .fitSize([980, 620], states);
+
+      const path = d3.geoPath().projection(projection);
+
+      const top10 = data
+        .slice()
+        .sort((a, b) => d3.descending(a.costIndex, b.costIndex))
+        .slice(0, 10);
+
+      const top10Set = new Set(top10.map(d => d.postal));
+
+      const radius = d3.scaleSqrt()
+        .domain([d3.min(data, d => d.costIndex), d3.max(data, d => d.costIndex)])
+        .range([4, 28]);
+
+      svg.append("text")
+        .attr("class", "chart-title")
+        .attr("x", width / 2)
+        .attr("y", 40)
+        .attr("text-anchor", "middle")
+        .text("State Cost of Living Index");
+
+      const mapGroup = svg.append("g")
+        .attr("transform", "translate(40,90)");
+
+      mapGroup.selectAll("path")
+        .data(states.features)
+        .enter()
+        .append("path")
+        .attr("class", "state")
+        .attr("d", path);
+
+      const symbols = mapGroup.selectAll("circle")
+        .data(data.filter(d => projection([d.lng, d.lat]) !== null))
+        .enter()
+        .append("circle")
+        .attr("class", d => top10Set.has(d.postal) ? "highlight-symbol" : "symbol")
+        .attr("cx", d => projection([d.lng, d.lat])[0])
+        .attr("cy", d => projection([d.lng, d.lat])[1])
+        .attr("r", d => radius(d.costIndex))
+        .on("mouseover", function(event, d) {
+          d3.select(this)
+            .attr("opacity", 0.85);
+
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.state}</strong><br>` +
+              `State: ${d.postal}<br>` +
+              `Cost Index: ${d.costIndex.toFixed(1)}`
+            );
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          d3.select(this)
+            .attr("opacity", 1);
+
+          tooltip.style("opacity", 0);
+        });
+
+      const legendX = 820;
+      const legendY = 650;
+
+      const legendValues = [
+        d3.min(data, d => d.costIndex),
+        110,
+        140,
+        d3.max(data, d => d.costIndex)
+      ];
+
+      svg.append("text")
+        .attr("class", "legend-label")
+        .attr("x", legendX)
+        .attr("y", legendY - 18)
+        .text("Cost Index");
+
+      svg.selectAll("circle.legend")
+        .data(legendValues)
+        .enter()
+        .append("circle")
+        .attr("cx", legendX + 35)
+        .attr("cy", d => legendY - radius(d))
+        .attr("r", d => radius(d))
+        .attr("fill", "none")
+        .attr("stroke", "#555");
+
+      svg.selectAll("line.legend")
+        .data(legendValues)
+        .enter()
+        .append("line")
+        .attr("x1", legendX + 35)
+        .attr("x2", legendX + 90)
+        .attr("y1", d => legendY - 2 * radius(d))
+        .attr("y2", d => legendY - 2 * radius(d))
+        .attr("stroke", "#555")
+        .attr("stroke-dasharray", "2,2");
+
+      svg.selectAll("text.legend-value")
+        .data(legendValues)
+        .enter()
+        .append("text")
+        .attr("x", legendX + 95)
+        .attr("y", d => legendY - 2 * radius(d) + 4)
+        .attr("font-size", 11)
+        .text(d => d.toFixed(1));
+
+      const top10ListX = 1010;
+      const top10ListY = 140;
+
+      svg.append("text")
+        .attr("x", top10ListX)
+        .attr("y", top10ListY)
+        .attr("font-size", 14)
+        .attr("font-weight", 700)
+        .text("Top 10 States");
+
+      svg.selectAll("text.top10-list")
+        .data(top10)
+        .enter()
+        .append("text")
+        .attr("x", top10ListX)
+        .attr("y", (d, i) => top10ListY + 24 + i * 18)
+        .attr("font-size", 12)
+        .text(d => `${d.postal} (${d.costIndex.toFixed(1)})`);
+    });
+  </script>
+</body>
+</html>
