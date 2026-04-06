@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>World Happiness Choropleth</title>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3"></script>
+
+<style>
+body { font-family: Arial; margin: 30px; }
+svg { border: 1px solid #ddd; }
+
+.country {
+  stroke: #fff;
+  stroke-width: 0.5;
+}
+
+.tooltip {
+  position: absolute;
+  background: white;
+  border: 1px solid #999;
+  padding: 8px;
+  font-size: 13px;
+  pointer-events: none;
+  opacity: 0;
+}
+</style>
+</head>
+
+<body>
+
+<h1>World Happiness Map</h1>
+<p>Happiness score by country (2015)</p>
+
+<svg width="1100" height="650"></svg>
+<div class="tooltip"></div>
+
+<script>
+
+const svg = d3.select("svg");
+const tooltip = d3.select(".tooltip");
+
+Promise.all([
+  d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json"),
+  d3.csv("world_happiness.csv", d => ({
+    country: d.country,
+    value: +d.value
+  }))
+]).then(([world, data]) => {
+
+  const countries = topojson.feature(world, world.objects.countries);
+
+  const projection = d3.geoNaturalEarth1()
+    .fitSize([1100, 650], countries);
+
+  const path = d3.geoPath().projection(projection);
+
+  // Map country name → value
+  const dataMap = new Map(data.map(d => [d.country, d.value]));
+
+  const values = data.map(d => d.value);
+
+  const color = d3.scaleSequential()
+    .domain([d3.min(values), d3.max(values)])
+    .interpolator(d3.interpolateYlGnBu);
+
+  svg.selectAll("path")
+    .data(countries.features)
+    .enter()
+    .append("path")
+    .attr("class", "country")
+    .attr("d", path)
+    .attr("fill", d => {
+      const name = d.properties.name;
+      const val = dataMap.get(name);
+      return val ? color(val) : "#eee";
+    })
+    .on("mouseover", (event, d) => {
+      const name = d.properties.name;
+      const val = dataMap.get(name);
+
+      tooltip.style("opacity", 1)
+        .html(`<strong>${name}</strong><br>
+               ${val ? "Happiness: " + val : "No data"}`);
+    })
+    .on("mousemove", event => {
+      tooltip
+        .style("left", (event.pageX + 10) + "px")
+        .style("top", (event.pageY - 20) + "px");
+    })
+    .on("mouseout", () => {
+      tooltip.style("opacity", 0);
+    });
+
+});
+
+</script>
+</body>
+</html>
