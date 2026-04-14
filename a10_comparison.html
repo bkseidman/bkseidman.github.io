@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignment 10 — Deceptive vs. Ethical Comparison</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.5;
+        max-width: 1200px;
+      }
+
+      h1 {
+        margin-bottom: 6px;
+      }
+
+      h2 {
+        margin-top: 0;
+        margin-bottom: 8px;
+      }
+
+      p {
+        color: #333;
+      }
+
+      .note {
+        color: #555;
+        max-width: 950px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-top: 24px;
+      }
+
+      .card {
+        border: 1px solid #ccc;
+        padding: 16px;
+        background: #fafafa;
+      }
+
+      iframe {
+        width: 100%;
+        height: 560px;
+        border: 1px solid #ddd;
+        background: white;
+      }
+
+      ul {
+        margin-top: 10px;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      a {
+        color: #0066cc;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .footer-links {
+        margin-top: 28px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Assignment 10 — Deceptive vs. Ethical Comparison</h1>
+    <p class="note">
+      <strong>Target Grade: B</strong>
+    </p>
+
+    <p class="note">
+      This page compares two D3 visualizations built from the same invented dataset on average
+      student sleep hours over eight weeks. 
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Deceptive Chart</h2>
+        <p>
+          This version uses a truncated y-axis and misleading color framing to exaggerate the
+          increase in sleep hours and make it seem more alarming.
+        </p>
+        <iframe src="a10_deceptive.html" title="Deceptive Chart"></iframe>
+      </div>
+
+      <div class="card">
+        <h2>Ethical Chart</h2>
+        <p>
+          This version uses the same dataset, but presents it with a neutral title, consistent
+          color, and a more honest y-axis scale.
+        </p>
+        <iframe src="a10_ethical.html" title="Ethical Chart"></iframe>
+      </div>
+    </div>
+
+    <h2>Key Difference</h2>
+    <ul>
+      <li>The deceptive chart makes a small increase look much steeper than it really is.</li>
+      <li>The ethical chart shows that the change is present, but not extreme.</li>
+    </ul>
+
+    <div class="footer-links">
+      <p><a href="a10_home.html">Back to Assignment 10 Home</a></p>
+      <p><a href="index.html">Back to Main Course Index</a></p>
+    </div>
+  </body>
+</html>
