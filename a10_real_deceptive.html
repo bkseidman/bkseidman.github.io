@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignment 10 — Deceptive Chart (Real Dataset)</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.4;
+      }
+
+      h1 {
+        margin-bottom: 6px;
+      }
+
+      .note {
+        color: #444;
+        max-width: 900px;
+      }
+
+      .axis-label {
+        font-size: 14px;
+      }
+
+      .line {
+        fill: none;
+        stroke: #8b0000;
+        stroke-width: 3;
+      }
+
+      .dot {
+        stroke: black;
+        stroke-width: 0.8px;
+      }
+
+      .legend text {
+        font-size: 13px;
+      }
+
+      .tooltip {
+        position: absolute;
+        background: white;
+        border: 1px solid #999;
+        padding: 8px 10px;
+        font-size: 13px;
+        pointer-events: none;
+        opacity: 0;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Breakfast Calories Show a Clear Escalation Pattern</h1>
+    <p class="note">
+      This chart uses McDonald’s breakfast calorie data, but presents the items in a way
+      that emphasizes an upward pattern and frames higher-calorie items as increasingly severe.
+    </p>
+
+    <svg width="980" height="560"></svg>
+    <div class="tooltip"></div>
+
+    <script>
+      // Real dataset, reordered by calories to imply progression
+      const data = [
+        { item: "Egg White Delight", calories: 250 },
+        { item: "Egg McMuffin", calories: 300 },
+        { item: "Sausage McMuffin", calories: 400 },
+        { item: "Sausage McMuffin with Egg Whites", calories: 350 },
+        { item: "Sausage McMuffin with Egg", calories: 450 },
+        { item: "Bacon Egg & Cheese Biscuit", calories: 460 },
+        { item: "Steak Egg & Cheese Biscuit", calories: 540 },
+        { item: "Hotcakes", calories: 550 },
+        { item: "Big Breakfast", calories: 740 },
+        { item: "Big Breakfast with Hotcakes", calories: 1090 }
+      ];
+
+      // Manipulation technique 1:
+      // reorder items by calorie value to create a stronger "rising trend"
+      data.sort((a, b) => a.calories - b.calories);
+
+      const svg = d3.select("svg");
+      const width = +svg.attr("width");
+      const height = +svg.attr("height");
+
+      const margin = { top: 50, right: 220, bottom: 80, left: 80 };
+      const innerWidth = width - margin.left - margin.right;
+      const innerHeight = height - margin.top - margin.bottom;
+
+      const chart = svg.append("g")
+        .attr("transform", `translate(${margin.left},${margin.top})`);
+
+      const tooltip = d3.select(".tooltip");
+
+      const x = d3.scaleLinear()
+        .domain([1, data.length])
+        .range([0, innerWidth]);
+
+      // Manipulation technique 2:
+      // truncated y-axis exaggerates differences
+      const y = d3.scaleLinear()
+        .domain([200, 1100])
+        .range([innerHeight, 0]);
+
+      // Manipulation technique 3:
+      // alarming color framing suggests danger / severity
+      const color = d3.scaleLinear()
+        .domain([250, 1090])
+        .range(["#f7b5b5", "#8b0000"]);
+
+      const xAxis = d3.axisBottom(x)
+        .ticks(data.length)
+        .tickFormat(d3.format("d"));
+
+      const yAxis = d3.axisLeft(y)
+        .tickValues([200, 400, 600, 800, 1000]);
+
+      chart.append("g")
+        .attr("transform", `translate(0,${innerHeight})`)
+        .call(xAxis);
+
+      chart.append("g")
+        .call(yAxis);
+
+      chart.append("text")
+        .attr("class", "axis-label")
+        .attr("x", innerWidth / 2)
+        .attr("y", innerHeight + 50)
+        .attr("text-anchor", "middle")
+        .text("Item Index");
+
+      chart.append("text")
+        .attr("class", "axis-label")
+        .attr("transform", "rotate(-90)")
+        .attr("x", -innerHeight / 2)
+        .attr("y", -55)
+        .attr("text-anchor", "middle")
+        .text("Calories");
+
+      const line = d3.line()
+        .x((d, i) => x(i + 1))
+        .y(d => y(d.calories));
+
+      chart.append("path")
+        .datum(data)
+        .attr("class", "line")
+        .attr("d", line);
+
+      chart.selectAll(".dot")
+        .data(data)
+        .enter()
+        .append("circle")
+        .attr("class", "dot")
+        .attr("cx", (d, i) => x(i + 1))
+        .attr("cy", d => y(d.calories))
+        .attr("r", 6)
+        .attr("fill", d => color(d.calories))
+        .on("mouseover", function(event, d) {
+          tooltip
+            .style("opacity", 1)
+            .html(
+              `<strong>${d.item}</strong><br>` +
+              `Calories: ${d.calories}`
+            );
+        })
+        .on("mousemove", function(event) {
+          tooltip
+            .style("left", (event.pageX + 12) + "px")
+            .style("top", (event.pageY - 28) + "px");
+        })
+        .on("mouseout", function() {
+          tooltip.style("opacity", 0);
+        });
+
+      // emphasis annotation on highest point
+      chart.append("text")
+        .attr("x", x(data.length) - 10)
+        .attr("y", y(1090) - 14)
+        .attr("text-anchor", "end")
+        .style("font-size", "13px")
+        .style("font-weight", "bold")
+        .style("fill", "#8b0000")
+        .text("Highest calorie item");
+
+      // legend
+      const legend = svg.append("g")
+        .attr("class", "legend")
+        .attr("transform", `translate(${width - 180},${margin.top + 40})`);
+
+      legend.append("text")
+        .attr("x", 0)
+        .attr("y", -15)
+        .style("font-weight", "bold")
+        .text("Calorie Risk Level");
+
+      const legendData = [
+        { label: "Lower risk", color: "#f7b5b5" },
+        { label: "Moderate risk", color: "#d96b6b" },
+        { label: "Higher risk", color: "#8b0000" }
+      ];
+
+      legend.selectAll("rect")
+        .data(legendData)
+        .enter()
+        .append("rect")
+        .attr("x", 0)
+        .attr("y", (d, i) => i * 28)
+        .attr("width", 18)
+        .attr("height", 18)
+        .attr("fill", d => d.color)
+        .attr("stroke", "black");
+
+      legend.selectAll("text.legend-label")
+        .data(legendData)
+        .enter()
+        .append("text")
+        .attr("class", "legend-label")
+        .attr("x", 28)
+        .attr("y", (d, i) => i * 28 + 13)
+        .text(d => d.label);
+
+      // small source line
+      svg.append("text")
+        .attr("x", margin.left)
+        .attr("y", height - 10)
+        .style("font-size", "12px")
+        .style("fill", "#555")
+        .text("Data source: McDonald’s menu nutrition dataset");
+    </script>
+  </body>
+</html>
