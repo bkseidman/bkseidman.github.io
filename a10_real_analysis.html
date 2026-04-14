@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignment 10 — Manipulation Analysis</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.6;
+        max-width: 950px;
+      }
+
+      h1 {
+        margin-bottom: 6px;
+      }
+
+      h2 {
+        margin-top: 28px;
+        margin-bottom: 8px;
+      }
+
+      p {
+        color: #333;
+      }
+
+      .note {
+        color: #555;
+      }
+
+      a {
+        color: #0066cc;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Assignment 10 — Manipulation Analysis</h1>
+    <p class="note"><strong>Target Grade: B</strong></p>
+
+    <h2>Analysis</h2>
+    <p>
+      The deceptive chart was designed to make the calorie values in the McDonald’s breakfast
+      dataset appear more extreme and more meaningful than they really are. One of the main
+      techniques used was reordering the items by calorie value. In the original dataset, the
+      breakfast items are simply different menu items, not a time series or a natural sequence.
+      By sorting them from lower calorie to higher calorie and then plotting them in that order,
+      the chart creates the impression of a steady upward trend. This makes the viewer more likely
+      to read the visualization as evidence of escalation, even though the pattern was created by
+      the way the data was arranged.
+    </p>
+
+    <p>
+      A second deceptive technique was the truncated y-axis. Instead of starting at zero, the
+      deceptive chart begins much higher, which visually stretches out the differences between
+      items. This makes the gap between 250 calories and 450 calories feel much larger than it
+      would in a more honest chart. A third technique was the use of a red color scale and a
+      legend framed as calorie risk. This encourages the viewer to associate higher calorie values
+      with danger or severity, even though the dataset itself is only reporting calorie counts.
+      The loaded title and annotation on the highest point add to that framing by directing
+      attention toward the most extreme value.
+    </p>
+
+    <p>
+      In contrast, the ethical chart communicates something much more limited and accurate. It
+      shows the same calorie values, but it keeps the original item labels, uses a neutral blue
+      color, and starts the y-axis at zero. Because of that, the viewer sees the chart as a simple
+      comparison of menu items rather than a dramatic pattern. The ethical version still allows the
+      data to be explored through tooltips, but it does not push the viewer toward a specific
+      emotional response. Overall, the comparison shows that visual framing can strongly influence
+      interpretation even when the underlying data stays exactly the same.
+    </p>
+
+    <p><a href="a10_real_comparison.html">Back to Comparison Page</a></p>
+    <p><a href="a10_home_real.html">Back to Assignment 10 Home</a></p>
+  </body>
+</html>
