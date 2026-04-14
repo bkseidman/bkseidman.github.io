@@ -12,11 +12,11 @@ This project includes both versions of the assignment:
 ## Links
 
 ### Invented Dataset
-https://your-site/a10_home_created.html
-
+[https://your-site/a10_home_created.html
+](https://bkseidman.github.io/a10_home_created.html)
 ### Real Dataset
-https://your-site/a10_home_real.html
-
+[https://your-site/a10_home_real.html
+](https://bkseidman.github.io/a10_home_real.html)
 ---
 
 ## Project Overview
