@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Deceptive Sleep Chart</title>
+  <script src="https://d3js.org/d3.v7.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: white;
+      margin: 20px;
+    }
+
+    h1 {
+      margin-bottom: 6px;
+    }
+
+    p {
+      max-width: 800px;
+      line-height: 1.4;
+    }
+
+    .axis-label {
+      font-size: 14px;
+    }
+
+    .legend text {
+      font-size: 13px;
+    }
+
+    .line {
+      fill: none;
+      stroke: #b22222;
+      stroke-width: 3;
+    }
+
+    .dot {
+      stroke: black;
+      stroke-width: 0.8px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Sharp Rise in Student Sleep Levels</h1>
+  <p>
+    This chart suggests that student sleep hours increased rapidly over a short period of time.
+  </p>
+
+  <svg width="760" height="500"></svg>
+
+  <script>
+    const data = [
+      { week: 1, sleep_hours: 6.5 },
+      { week: 2, sleep_hours: 6.8 },
+      { week: 3, sleep_hours: 7.0 },
+      { week: 4, sleep_hours: 7.2 },
+      { week: 5, sleep_hours: 7.1 },
+      { week: 6, sleep_hours: 7.3 },
+      { week: 7, sleep_hours: 7.5 },
+      { week: 8, sleep_hours: 7.6 }
+    ];
+
+    const svg = d3.select("svg");
+    const width = +svg.attr("width");
+    const height = +svg.attr("height");
+
+    const margin = { top: 40, right: 180, bottom: 60, left: 70 };
+    const innerWidth = width - margin.left - margin.right;
+    const innerHeight = height - margin.top - margin.bottom;
+
+    const chart = svg.append("g")
+      .attr("transform", `translate(${margin.left},${margin.top})`);
+
+    //truncated y-axis
+    const x = d3.scaleLinear()
+      .domain([1, 8])
+      .range([0, innerWidth]);
+
+    const y = d3.scaleLinear()
+      .domain([6.4, 7.7])
+      .range([innerHeight, 0]);
+
+    //messed up color scale
+    const color = d3.scaleLinear()
+      .domain([6.5, 7.6])
+      .range(["#f4a3a3", "#8b0000"]);
+
+    const xAxis = d3.axisBottom(x)
+      .ticks(8)
+      .tickFormat(d3.format("d"));
+
+    const yAxis = d3.axisLeft(y)
+      .tickValues([6.4, 6.6, 6.8, 7.0, 7.2, 7.4, 7.6]);
+
+    chart.append("g")
+      .attr("transform", `translate(0,${innerHeight})`)
+      .call(xAxis);
+
+    chart.append("g")
+      .call(yAxis);
+
+    chart.append("text")
+      .attr("class", "axis-label")
+      .attr("x", innerWidth / 2)
+      .attr("y", innerHeight + 45)
+      .attr("text-anchor", "middle")
+      .text("Week");
+
+    chart.append("text")
+      .attr("class", "axis-label")
+      .attr("transform", "rotate(-90)")
+      .attr("x", -innerHeight / 2)
+      .attr("y", -45)
+      .attr("text-anchor", "middle")
+      .text("Hours of Sleep");
+
+    const line = d3.line()
+      .x(d => x(d.week))
+      .y(d => y(d.sleep_hours));
+
+    chart.append("path")
+      .datum(data)
+      .attr("class", "line")
+      .attr("d", line);
+
+    chart.selectAll(".dot")
+      .data(data)
+      .enter()
+      .append("circle")
+      .attr("class", "dot")
+      .attr("cx", d => x(d.week))
+      .attr("cy", d => y(d.sleep_hours))
+      .attr("r", 5)
+      .attr("fill", d => color(d.sleep_hours));
+    
+    const legend = svg.append("g")
+      .attr("class", "legend")
+      .attr("transform", `translate(${width - 145},${margin.top + 40})`);
+
+    legend.append("text")
+      .attr("x", 0)
+      .attr("y", -15)
+      .style("font-weight", "bold")
+      .text("Sleep Concern Level");
+
+    const legendData = [
+      { label: "Lower concern", color: "#f4a3a3" },
+      { label: "Moderate concern", color: "#cd5c5c" },
+      { label: "Higher concern", color: "#8b0000" }
+    ];
+
+    legend.selectAll("rect")
+      .data(legendData)
+      .enter()
+      .append("rect")
+      .attr("x", 0)
+      .attr("y", (d, i) => i * 28)
+      .attr("width", 18)
+      .attr("height", 18)
+      .attr("fill", d => d.color)
+      .attr("stroke", "black");
+
+    legend.selectAll("legend-label")
+      .data(legendData)
+      .enter()
+      .append("text")
+      .attr("x", 28)
+      .attr("y", (d, i) => i * 28 + 13)
+      .text(d => d.label);
+  </script>
+</body>
+</html>
