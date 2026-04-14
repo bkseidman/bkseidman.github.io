@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Assignment 10 — Real Dataset Comparison</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        margin: 40px;
+        line-height: 1.5;
+        max-width: 1300px;
+      }
+
+      h1 {
+        margin-bottom: 6px;
+      }
+
+      h2 {
+        margin-top: 0;
+        margin-bottom: 8px;
+      }
+
+      p {
+        color: #333;
+      }
+
+      .note {
+        color: #555;
+        max-width: 1000px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 28px;
+        margin-top: 24px;
+      }
+
+      .card {
+        border: 1px solid #ccc;
+        padding: 16px;
+        background: #fafafa;
+      }
+
+      iframe {
+        width: 100%;
+        height: 680px;
+        border: 1px solid #ddd;
+        background: white;
+      }
+
+      ul {
+        margin-top: 10px;
+      }
+
+      li {
+        margin: 6px 0;
+      }
+
+      a {
+        color: #0066cc;
+        text-decoration: none;
+      }
+
+      a:hover {
+        text-decoration: underline;
+      }
+
+      .footer-links {
+        margin-top: 28px;
+      }
+    </style>
+  </head>
+
+  <body>
+    <h1>Assignment 10 — Deceptive vs. Ethical Comparison</h1>
+    <p class="note"><strong>Target Grade: B</strong></p>
+
+    <p class="note">
+      This page compares two D3 visualizations built from the same real dataset of
+      McDonald’s breakfast item calories. The deceptive version uses design choices
+      that exaggerate patterns and imply a stronger conclusion, while the ethical
+      version presents the same values with clearer context and more neutral framing.
+    </p>
+
+    <div class="grid">
+      <div class="card">
+        <h2>Deceptive Chart</h2>
+        <p>
+          This version reorders the data to imply progression, uses a truncated
+          y-axis to exaggerate differences, and applies a red risk-style color
+          scale that frames higher calorie values as increasingly severe.
+        </p>
+        <iframe src="a10_real_deceptive.html" title="Deceptive Chart"></iframe>
+      </div>
+
+      <div class="card">
+        <h2>Ethical Chart</h2>
+        <p>
+          This version keeps the same dataset but uses original labels, a y-axis
+          starting at zero, and neutral colors so the values can be interpreted
+          with more accuracy and less framing bias.
+        </p>
+        <iframe src="a10_real_ethical.html" title="Ethical Chart"></iframe>
+      </div>
+    </div>
+
+    <h2>What Changes Between Them</h2>
+    <ul>
+      <li>The deceptive chart makes the calorie differences look more dramatic than they are.</li>
+      <li>The deceptive chart also suggests a rising pattern by reordering the items.</li>
+      <li>The ethical chart shows the same data without forcing that interpretation.</li>
+      <li>Both charts use the same values, but the design choices change the message significantly.</li>
+    </ul>
+
+    <div class="footer-links">
+      <p><a href="a10_home_real.html">Back to Assignment 10 Home</a></p>
+      <p><a href="index.html">Back to Main Course Index</a></p>
+    </div>
+  </body>
+</html>
